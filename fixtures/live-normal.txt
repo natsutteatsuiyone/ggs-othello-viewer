@@ -1,0 +1,326 @@
+
+
+Generic Game Server (GGS) 
+located at the University of Alberta, Edmonton, Canada
+------------------------------------------------------
+
+Multiplexors on:
+opal.cs.ualberta.ca (129.128.4.58) @ 5000/1/2, 4000/1/2, SSL: 5006
+ftp.nj.nec.com      (138.15.10.2)  @ 4000/1/2, 5000/1/2, SSL: 5006
+
+(C) Igor Durdanovic igord@research.nj.nec.com 
+                    http://ftp.nj.nec.com/homepages/igord/
+(C) Michael Buro    mburo@cs.ualberta.ca 
+                    http://www.cs.ualberta.ca/~mburo/
+
+: Enter login (yours, or one you'd like to use).
+: Enter your password.
+READY
+: help faq
+Frequently Asked Questions
+--------------------------
+
+1) Why is my graphical client no longer working?
+ = This is not IOS anymore .. different protocols.
+
+2) Where can I get a (new) graphical client?
+ = GGS Applet: http://www.neci.nj.nec.com/homepages/mic/ggsa
+
+3) I don't have Java .. what can I do, it seems like lots of typing?
+ = Yes and No. It will take you some time to grasp the power of
+   aliases, but once you have mastered system aliases (type: help alias)
+   your life here will become much easier. You can even write your own
+   aliases!
+
+4) I just want to play Othello, how do I do it? 
+ = You have to talk to Othello Service Server .. (type: tell /os help)
+   If you haven't mastered (system) aliases yet go back to (3).
+
+5) I want to se Othello top list, I type tell /os top and get error?
+ = /os implements all kinds of variants of Othello, you have to tell it
+   what variant you are interested in (type: tell /os top 8)
+
+6) What other games are available?
+ = /os = Othello, /ams = Amazons, /cks = Checkers.
+
+7) What other documentation is available?
+ = Read the help files .. (type: help) they are pretty long .. or read
+   them on the web: http://external.nj.nec.com/homepages/igord/gsa-ggs.htm
+   For service specific help files request them from service!
+   for example type: tell /ams help.    
+READY
+: help help
+Generic Game Server help files
+-------------+----------------------------------------
+file         | description
+-------------+----------------------------------------
+alias          Introduction to system aliases
+cmds           A list of all commands
+faq            Frequently Asked Questions
+format         Format of messages, parsing specification (outdated)
+ghost          Ghost player concept for tournaments
+gui            List of Graphical and other clients for GGS
+help           This file
+news           Latest news
+old.news       Archived news
+ssl            How to connect to GGS using encrypted channel
+
+Full Docs: http://external.nj.nec.com/homepages/igord/gsa-ggs.htm
+Mic's GGSApplet: http://www.neci.nj.nec.com/homepages/mic/ggsa
+ 
+READY
+: help news
+GGS News ( also "help old.news" )
+
+25/Apr/2004    New GGSA version (thanks Daniel). See http://www.cs.ualberta.ca/~mburo/ggsa
+25/June/2007   GGS has moved to bodo1.cs.ualberta.ca .
+5/July/2010    GGS has moved to skatgame.net, ports 4000 & 5000
+
+** To REGISTER: give your name & email to an admin (type: group _admin)
+** GUIs & Clients (help gui), Secure Socket Layer (help ssl)
+** Source and game-archives: http://www.cs.ualberta.ca/~mburo/GGS
+READY
+: +ack:  vt100 - => vt100 -
+READY
+: +ack:  tell /os vt100 - => tell /os vt100 -
+READY
+: +ack:  tell /os client + => tell /os client +
+READY
+: +ack:  tell /os notify + * => tell /os notify + *
+READY
+: +ack:  tell /os notify + => tell /os notify +
+READY
+: +ack:  tell /os watch + => tell /os watch +
+READY
+: +ack:  tell /os match => tell /os match
+READY
+
+/os: match 1/1
+|  .4 1720 pbot     1720 edax            8  U 0
+READY
+: +ack:  tell /os watch + .4 => tell /os watch + .4
+READY
+: +ack:  tell /os finger edax pbot => tell /os finger edax pbot
+READY
+: +ack:  tell /os who 8 a => tell /os who 8 a
+READY
+
+/os: join .4 (;GM[Othello]PC[GGS/os]DT[2026.09.30_13:29:50.UTC]
+|PB[pbot]PW[edax]
+|RB[1720]RW[1720]
+|TI[05:00//02:00]
+|TY[8]RE[?]
+|BO[8 -------- -------- -------- ---O*--- ---*O--- -------- -------- -------- *]
+|;)
+READY
+
+/os: finger edax
+|login  : edax
+|dblen  : 100.0 = 150 / 150
+|level  : 1
+|open   : 0
+|client : -
+|trust  : +
+|rated  : +
+|bell   : -r -p -w -n -ns -nn -nt -ni -nr -nw -ta -to -tp
+|vt100  : -
+|hear   : +
+|play   : .4
+|stored (-) : 0
+|notify (-) : 
+|track  (-) : 
+|ignore (-) : 
+|request(+) :  : 
+|watch  (-) : 
+|accept : size > 0
+|decline: 
+|Type  Rating@StDev      Inactive       AScore    Win   Draw   Loss
+READY
+
+/os: finger pbot
+|login  : pbot
+|dblen  :   0.0 = 0 / 0
+|level  : 0
+|open   : 1
+|client : +
+|trust  : -
+|rated  : -
+|bell   : -r -p -w -n -ns -nn -nt -ni -nr -nw -ta -to -tp
+|vt100  : -
+|hear   : +
+|play   : .4
+|stored (-) : 0
+|notify (+) : * 
+|track  (-) : 
+|ignore (-) : 
+|request(-) :  : 
+|watch  (-) : 
+|accept : 
+|decline: 
+|Type  Rating@StDev      Inactive       AScore    Win   Draw   Loss
+READY
+
+/os: who     4      change:    win    draw    loss         match(es)
+|/os      - 1720.0@350.0 ->  +324.4    +0.0  -324.4 @290.2 
+|edax     - 1720.0@350.0 ->  +324.4    +0.0  -324.4 @290.2 .4
+|pbot     - 1720.0@350.0 ->  +324.4    +0.0  -324.4 @290.2 .4
+|pwatch   - 1720.0@350.0
+READY
+
+/os: update .4 d3//6.00
+READY
+
+/os: update .4 c5//0.15
+READY
+
+/os: update .4 b6//1.03
+READY
+
+/os: update .4 f3/11.00/0.10
+READY
+
+/os: update .4 f4//1.08
+READY
+
+/os: update .4 e3/13.00/0.09
+READY
+
+/os: update .4 d2//1.09
+READY
+
+/os: update .4 f5/13.00/0.15
+READY
+
+/os: update .4 g3//1.02
+READY
+
+/os: update .4 e2/16.00/0.16
+READY
+
+/os: update .4 d1//1.02
+READY
+
+/os: update .4 f2/17.00/0.06
+READY
+
+/os: update .4 e1//1.12
+READY
+
+/os: update .4 c4/17.00/0.01
+READY
+
+/os: update .4 c3//1.15
+READY
+
+/os: update .4 b5/17.00
+READY
+
+/os: update .4 b4//1.15
+READY
+
+/os: update .4 c2/21.00/0.14
+READY
+
+/os: update .4 b2//1.04
+READY
+
+/os: update .4 b1/38.00/0.11
+READY
+
+/os: update .4 b3//1.06
+READY
+
+/os: update .4 a1/49.00/0.16
+READY
+
+/os: update .4 a2//1.02
+READY
+
+/os: update .4 a4/59.00/0.21
+READY
+
+/os: update .4 a5//1.16
+READY
+
+/os: update .4 a3/61.00/0.21
+READY
+
+/os: update .4 g5//1.16
+READY
+
+/os: update .4 f1/64.00/0.08
+READY
+
+/os: update .4 g1//1.10
+READY
+
+/os: update .4 c1/64.00
+READY
+
+/os: update .4 pa//1.15
+READY
+
+/os: update .4 h1/64.00/0.01
+READY
+
+/os: update .4 pa//1.27
+READY
+
+/os: update .4 a6/64.00
+READY
+
+/os: update .4 pa//1.15
+READY
+
+/os: update .4 h6/64.00
+READY
+
+/os: update .4 h5//1.17
+READY
+
+/os: update .4 h4/64.00
+READY
+
+/os: update .4 h2//1.16
+READY
+
+/os: update .4 g2/64.00
+READY
+
+/os: update .4 pa//1.16
+READY
+
+/os: update .4 h3/64.00
+READY
+
+/os: update .4 pa//1.16
+READY
+
+/os: update .4 f6/64.00
+READY
+
+/os: update .4 pa//1.16
+READY
+
+/os: update .4 c6/64.00
+READY
+
+/os: update .4 e6//1.16
+READY
+
+/os: update .4 f7/64.00
+READY
+
+/os: - match .4 1720 pbot 1720 edax 8 U -64.00
+READY
+: +ack:  tell /os tell .4 hello from watcher => tell /os tell .4 hello from watcher
+READY
+
+/os: ERR match '.4' not found.
+READY
+READY
+: +ack:  tell /os match => tell /os match
+READY
+
+/os: match 0/0
+READY

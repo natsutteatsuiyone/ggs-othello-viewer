@@ -1,0 +1,185 @@
+
+
+Generic Game Server (GGS) 
+located at the University of Alberta, Edmonton, Canada
+------------------------------------------------------
+
+Multiplexors on:
+opal.cs.ualberta.ca (129.128.4.58) @ 5000/1/2, 4000/1/2, SSL: 5006
+ftp.nj.nec.com      (138.15.10.2)  @ 4000/1/2, 5000/1/2, SSL: 5006
+
+(C) Igor Durdanovic igord@research.nj.nec.com 
+                    http://ftp.nj.nec.com/homepages/igord/
+(C) Michael Buro    mburo@cs.ualberta.ca 
+                    http://www.cs.ualberta.ca/~mburo/
+
+: Enter login (yours, or one you'd like to use).
+: Enter your password.
+READY
+: help faq
+Frequently Asked Questions
+--------------------------
+
+1) Why is my graphical client no longer working?
+ = This is not IOS anymore .. different protocols.
+
+2) Where can I get a (new) graphical client?
+ = GGS Applet: http://www.neci.nj.nec.com/homepages/mic/ggsa
+
+3) I don't have Java .. what can I do, it seems like lots of typing?
+ = Yes and No. It will take you some time to grasp the power of
+   aliases, but once you have mastered system aliases (type: help alias)
+   your life here will become much easier. You can even write your own
+   aliases!
+
+4) I just want to play Othello, how do I do it? 
+ = You have to talk to Othello Service Server .. (type: tell /os help)
+   If you haven't mastered (system) aliases yet go back to (3).
+
+5) I want to se Othello top list, I type tell /os top and get error?
+ = /os implements all kinds of variants of Othello, you have to tell it
+   what variant you are interested in (type: tell /os top 8)
+
+6) What other games are available?
+ = /os = Othello, /ams = Amazons, /cks = Checkers.
+
+7) What other documentation is available?
+ = Read the help files .. (type: help) they are pretty long .. or read
+   them on the web: http://external.nj.nec.com/homepages/igord/gsa-ggs.htm
+   For service specific help files request them from service!
+   for example type: tell /ams help.    
+READY
+: help help
+Generic Game Server help files
+-------------+----------------------------------------
+file         | description
+-------------+----------------------------------------
+alias          Introduction to system aliases
+cmds           A list of all commands
+faq            Frequently Asked Questions
+format         Format of messages, parsing specification (outdated)
+ghost          Ghost player concept for tournaments
+gui            List of Graphical and other clients for GGS
+help           This file
+news           Latest news
+old.news       Archived news
+ssl            How to connect to GGS using encrypted channel
+
+Full Docs: http://external.nj.nec.com/homepages/igord/gsa-ggs.htm
+Mic's GGSApplet: http://www.neci.nj.nec.com/homepages/mic/ggsa
+ 
+READY
+: help news
+GGS News ( also "help old.news" )
+
+25/Apr/2004    New GGSA version (thanks Daniel). See http://www.cs.ualberta.ca/~mburo/ggsa
+25/June/2007   GGS has moved to bodo1.cs.ualberta.ca .
+5/July/2010    GGS has moved to skatgame.net, ports 4000 & 5000
+
+** To REGISTER: give your name & email to an admin (type: group _admin)
+** GUIs & Clients (help gui), Secure Socket Layer (help ssl)
+** Source and game-archives: http://www.cs.ualberta.ca/~mburo/GGS
+READY
+: +ack:  vt100 - => vt100 -
+READY
+
+: + /os 1
+: + edax 1
+: + parch 0
+READY
+: +ack:  notify + * => notify + *
+READY
+: +ack:  notify + => notify +
+READY
+: +ack:  tell /os vt100 - => tell /os vt100 -
+READY
+: +ack:  tell /os client + => tell /os client +
+READY
+: +ack:  tell /os notify + * => tell /os notify + *
+READY
+: +ack:  tell /os notify + => tell /os notify +
+READY
+: +ack:  tell /os watch + => tell /os watch +
+READY
+: +ack:  tell /os match => tell /os match
+READY
+
+/os: match 0/0
+READY
+
+: + prated 1
+READY
+
+/os: + match .23 1402 prated 2038 edax 8 R
+READY
+
+/os: - match .23 1367 prated 2073 edax 8 R -64.00  .73
+READY
+
+: - prated 1
+READY
+: +ack:  tell /os history => tell /os history
+READY
+
+/os: history 0 parch
+READY
+: +ack:  tell /os history prated => tell /os history prated
+READY
+
+/os: history 4 prated
+|.67      01 Oct 2026 03:32:59 1720 prated   1720 edax      -64.0 8
+|.68      01 Oct 2026 03:35:08 1720 prated   1720 edax      -59.0 s8r20
+|.72      01 Oct 2026 03:41:21 1403 prated   2037 edax      -64.0 s8r20
+|.73      01 Oct 2026 03:42:15 1402 prated   2038 edax      -64.0 8
+READY
+: +ack:  tell /os stored prated => tell /os stored prated
+READY
+
+/os: stored 1 prated
+|.69      01 Oct 2026 03:35:41 prated   edax     8:l
+READY
+: +ack:  tell /os look .73 => tell /os look .73
+READY
+
+/os: look
+|1 (;GM[Othello]PC[GGS/os]DT[2026.10.01_03:42:15.UTC]PB[prated]PW[edax]RB[1402.2]RW[2037.8]TI[05:00//02:00]TY[8]RE[-64.000]BO[8 -------- -------- -------- ---O*--- ---*O--- -------- -------- -------- *]B[d3//1.62]W[c5]B[b6//0.26]W[f3/9.00]B[f4//0.26]W[e3/12.00]B[d2//0.26]W[f5/12.00]B[g3//0.26]W[e2/15.00]B[d1//0.26]W[f2/16.00]B[e1//0.26]W[c4/16.00]B[c3//0.26]W[b5/16.00]B[b4//0.26]W[c2/21.00]B[b2//0.26]W[b1/36.00/0.01]B[b3//0.26]W[a2/53.00]B[a3//0.26]W[a4/53.00]B[a5//0.26]W[a1/57.00]B[g4//0.08]W[c1/57.00]B[g5//0.26]W[f1/64.00]B[pa//0.26]W[a6/64.00]B[pa//0.26]W[h6/64.00]B[h5//0.26]W[g1/64.00]B[h7//0.25]W[h3/64.00]B[g2//0.25]W[h4/64.00]B[h2//0.25]W[b7/64.00]B[a7//0.25]W[a8/64.00]B[b8//0.25]W[c8/64.00]B[pa//0.25]W[c7/64.00]B[pa//0.25]W[c6/64.00]B[d6//0.26]W[h1/64.00]B[e6//0.25]W[h8/64.00]B[pa//0.25]W[f6/64.00]B[g6//0.26]W[g7/64.00]B[d7//0.25]W[d8/64.00]B[e7//0.26]W[f8/64.00]B[f7//0.25]W[g8/64.00];)
+READY
+: +ack:  tell /os look .72 => tell /os look .72
+READY
+
+/os: look
+|2 (;GM[Othello]PC[GGS/os]DT[2026.10.01_03:41:21.UTC]PB[prated]PW[edax]RB[1402.75]RW[2037.25]TI[05:00//02:00]TY[s8r20]RE[-64.000]BO[8 ---*---- --**---- --*OOO-- -*-OOO-- --OO**** -OO---*- -------- -------- *]B[e2//1.61]W[b3/12.00/0.10]B[b2//0.30]W[c4/44.00/0.14]B[f2//0.31]W[a1/50.00/0.13]B[b1//0.30]W[a5/58.00/0.10]B[a4//0.30]W[c1/63.00/0.06]B[b5//0.30]W[a2/64.00/2.15]B[a6//0.30]W[e1/64.00/0.01]B[d6//0.30]W[a3/64.00/0.02]B[pa//0.29]W[f1/64.00]B[pa//0.30]W[c7/64.00]B[b7//0.30]W[g1/64.00]B[d7//0.30]W[g3/64.00]B[g2//0.30]W[g4/64.00]B[h2//0.30]W[h4/64.00]B[h3//0.30]W[h1/64.00]B[pa//0.30]W[h6/64.00]B[pa//0.30]W[e6/64.00]B[f6//0.30]W[h7/64.00]B[pa//0.30]W[g7/64.00]B[pa//0.30]W[f7/64.00]B[pa//0.30]W[e7/64.00]B[f8//0.30]W[d8/64.00]B[e8//0.30]W[g8/64.00]B[pa//0.30]W[c8/64.00]B[pa//0.26]W[b8/64.00]B[pa//0.26]W[a7/64.00];)(;GM[Othello]PC[GGS/os]DT[2026.10.01_03:41:21.UTC]PB[edax]PW[prated]RB[2037.25]RW[1402.75]TI[05:00//02:00]TY[s8r20]RE[+64.000]BO[8 ---*---- --**---- --*OOO-- -*-OOO-- --OO**** -OO---*- -------- -------- *]B[E2/-12.00/0.17]W[b1//0.31]B[C4/3.00/0.08]W[c1//0.30]B[A1/18.00/0.24]W[e1//0.30]B[E6/20.00/0.17]W[a3//0.31]B[B5/22.00/0.34]W[b3//0.26]B[C7/22.00]W[a6//0.31]B[F1/24.00/0.18]W[d6//0.28]B[A2/28.00/3.71]W[b2//0.14]B[F6/42.00/0.97]W[h6//0.17]B[H7/54.00/0.21]W[g4//0.30]B[F2/62.00/0.10]W[g1//0.30]B[H1/62.00]W[g7//0.30]B[A4/62.00/0.02]W[b8//0.30]B[A5/64.00/0.01]W[pa//0.30]B[A7/64.00]W[pa//0.30]B[G3/64.00]W[g2//0.30]B[D7/64.00]W[b7//0.30]B[D8/64.00]W[e7//0.30]B[A8/64.00]W[pa//0.30]B[C8/64.00]W[pa//0.30]B[H2/64.00]W[pa//0.30]B[H3/64.00]W[pa//0.30]B[H4/64.00]W[pa//0.30]B[F7/64.00];)
+READY
+: +ack:  tell /os look .69 => tell /os look .69
+READY
+
+/os: look
+|1 (;GM[Othello]PC[GGS/os]DT[2026.10.01_03:35:41.UTC]PB[prated]PW[edax]RB[1402.2]RW[2037.8]TI[05:00//02:00]TY[8]RE[?]BO[8 -------- -------- -------- ---O*--- ---*O--- -------- -------- -------- *]B[d3//2.53]W[c5]B[b6//1.18]W[f3/9.00]B[f4//1.17]W[e3/12.00]B[d2//1.18]W[c4/12.00];)
+READY
+: +ack:  tell /os look .17 => tell /os look .17
+READY
+
+/os: ERR no archived match '.17' found.
+READY
+: +ack:  tell /os top 8 24 => tell /os top 8 24
+READY
+
+/os: top       1720.0@352.7      Inactive       AScore    Win   Draw   Loss 2
+|    1 edax     2072.7@278.0=     00:00:11+@278.0 +64.0      2      0      0
+|    2 prated   1367.3@278.0=     00:00:11+@278.0 -64.0      0      0      2
+READY
+: +ack:  tell /os top 8r 24 => tell /os top 8r 24
+READY
+
+/os: top       1720.0@352.3      Inactive       AScore    Win   Draw   Loss 2
+|    1 edax     2072.3@278.0=     00:01:06+@278.0 +61.5      2      0      0
+|    2 prated   1367.7@278.0=     00:01:06+@278.0 -61.5      0      0      2
+READY
+: +ack:  tell /os who 8r a => tell /os who 8r a
+READY
+
+/os: who     3      change:    win    draw    loss         match(es)
+|/os      - 1720.0@350.0 ->  +324.4    +0.0  -324.4 @290.2 
+|parch    - 1720.0@350.0 
+|edax     + 2072.3@278.0 ->  +649.7  +253.8  -142.0 @302.8
+READY

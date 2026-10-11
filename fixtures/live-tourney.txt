@@ -1,0 +1,557 @@
+
+
+Generic Game Server (GGS) 
+located at the University of Alberta, Edmonton, Canada
+------------------------------------------------------
+
+Multiplexors on:
+opal.cs.ualberta.ca (129.128.4.58) @ 5000/1/2, 4000/1/2, SSL: 5006
+ftp.nj.nec.com      (138.15.10.2)  @ 4000/1/2, 5000/1/2, SSL: 5006
+
+(C) Igor Durdanovic igord@research.nj.nec.com 
+                    http://ftp.nj.nec.com/homepages/igord/
+(C) Michael Buro    mburo@cs.ualberta.ca 
+                    http://www.cs.ualberta.ca/~mburo/
+
+: Enter login (yours, or one you'd like to use).
+: Enter your password.
+READY
+: help faq
+Frequently Asked Questions
+--------------------------
+
+1) Why is my graphical client no longer working?
+ = This is not IOS anymore .. different protocols.
+
+2) Where can I get a (new) graphical client?
+ = GGS Applet: http://www.neci.nj.nec.com/homepages/mic/ggsa
+
+3) I don't have Java .. what can I do, it seems like lots of typing?
+ = Yes and No. It will take you some time to grasp the power of
+   aliases, but once you have mastered system aliases (type: help alias)
+   your life here will become much easier. You can even write your own
+   aliases!
+
+4) I just want to play Othello, how do I do it? 
+ = You have to talk to Othello Service Server .. (type: tell /os help)
+   If you haven't mastered (system) aliases yet go back to (3).
+
+5) I want to se Othello top list, I type tell /os top and get error?
+ = /os implements all kinds of variants of Othello, you have to tell it
+   what variant you are interested in (type: tell /os top 8)
+
+6) What other games are available?
+ = /os = Othello, /ams = Amazons, /cks = Checkers.
+
+7) What other documentation is available?
+ = Read the help files .. (type: help) they are pretty long .. or read
+   them on the web: http://external.nj.nec.com/homepages/igord/gsa-ggs.htm
+   For service specific help files request them from service!
+   for example type: tell /ams help.    
+READY
+: help help
+Generic Game Server help files
+-------------+----------------------------------------
+file         | description
+-------------+----------------------------------------
+alias          Introduction to system aliases
+cmds           A list of all commands
+faq            Frequently Asked Questions
+format         Format of messages, parsing specification (outdated)
+ghost          Ghost player concept for tournaments
+gui            List of Graphical and other clients for GGS
+help           This file
+news           Latest news
+old.news       Archived news
+ssl            How to connect to GGS using encrypted channel
+
+Full Docs: http://external.nj.nec.com/homepages/igord/gsa-ggs.htm
+Mic's GGSApplet: http://www.neci.nj.nec.com/homepages/mic/ggsa
+ 
+READY
+: help news
+GGS News ( also "help old.news" )
+
+25/Apr/2004    New GGSA version (thanks Daniel). See http://www.cs.ualberta.ca/~mburo/ggsa
+25/June/2007   GGS has moved to bodo1.cs.ualberta.ca .
+5/July/2010    GGS has moved to skatgame.net, ports 4000 & 5000
+
+** To REGISTER: give your name & email to an admin (type: group _admin)
+** GUIs & Clients (help gui), Secure Socket Layer (help ssl)
+** Source and game-archives: http://www.cs.ualberta.ca/~mburo/GGS
+READY
+: +ack:  verbose +ack => verbose +ack
+READY
+: +ack:  vt100 - => vt100 -
+READY
+
+: + /os 1
+: + /td 1
+: + edax 1
+: + nra 1
+: + nrb 1
+: + ptour1 0
+READY
+: +ack:  notify + * => notify + *
+READY
+: +ack:  notify + => notify +
+READY
+: +ack:  tell /os client + => tell /os client +
+READY
+: +ack:  tell /os notify + * => tell /os notify + *
+READY
+: +ack:  tell /os match => tell /os match
+READY
+
+/os: match 0/0
+READY
+: +ack:  chann + .tourney => chann + .tourney
+READY
+
+: + root 3
+READY
+
+.chat /td: 
+|---------------- /td --------------
+|tournament 1 starting in 2 minutes
+|(8x8  Reversi clock: 1:00//0:30, 2 rounds rrobin)
+|to play: tell /td join 1
+|for tournament messages: chann + .tourney
+|---------------- /td --------------
+READY
+
+.chat /td: 
+|---------------- /td --------------
+|tournament 2 starting in 2 minutes
+|(8x8  Reversi clock: 1:00//0:30, 2 rounds swiss)
+|to play: tell /td join 2
+|for tournament messages: chann + .tourney
+|---------------- /td --------------
+READY
+
+.tourney /td: join: nra joins tournament 1
+READY
+
+.tourney /td: join: nrb joins tournament 1
+READY
+
+.tourney /td: join: nra joins tournament 2
+READY
+
+.tourney /td: join: nrb joins tournament 2
+READY
+: +ack:  tell /td tourneys => tell /td tourneys
+READY
+
+/td: tourneys: 2
+|   id director  game #pl   round start             clock       type
+|    1     root   /os   2   0/  2  1:48        1:00//0:30          8
+|    2     root   /os   2   0/  2  1:50        1:00//0:30          8
+READY
+: +ack:  tell /td tourneys => tell /td tourneys
+READY
+
+/td: tourneys: 2
+|   id director  game #pl   round start             clock       type
+|    1     root   /os   2   0/  2  1:46        1:00//0:30          8
+|    2     root   /os   2   0/  2  1:48        1:00//0:30          8
+READY
+: +ack:  tell /td finger 1 => tell /td finger 1
+READY
+
+/td: finger: 1
+|t ptour1 finger: 
+|id        : 1
+|joining   : open
+|director  : root
+|service   : /os
+|rounds    : 0/2
+|style     : rrobin
+|clock     : 1:00//0:30
+|type      : 8
+|breaks    :  1:00
+|players   : 2 nra nrb 
+|round 1 begins in  1:46
+READY
+: +ack:  tell /td st 1 => tell /td st 1
+READY
+
+/td: ERR 2: st: can't issue command before tournament starts
+READY
+: +ack:  tell /td rankings 1 => tell /td rankings 1
+READY
+
+/td: ERR 2: rankings: can't issue command before tournament starts
+READY
+: +ack:  tell /td rankings 99 => tell /td rankings 99
+READY
+
+/td: ERR 16: rankings: tournament id does not exist
+READY
+: +ack:  tell /td finger 2 => tell /td finger 2
+READY
+
+/td: finger: 2
+|t ptour1 finger: 
+|id        : 2
+|joining   : open
+|director  : root
+|service   : /os
+|rounds    : 0/2
+|style     : swiss
+|clock     : 1:00//0:30
+|type      : 8
+|breaks    :  1:00
+|players   : 2 nra nrb 
+|round 1 begins in  1:46
+READY
+
+.tourney /td: tournament 1 starts in  1:00
+READY
+
+.tourney /td: tournament 2 starts in  1:00
+READY
+
+.tourney /td: tournament 1 starts in  0:10
+READY
+
+.tourney /td: tournament 2 starts in  0:10
+READY
+
+.tourney /td: starting round 1 of tournament 1
+READY
+
+.tourney /td: starting round 1 of tournament 2
+READY
+
+/os: + match .44 2129 nrb 2114 nra 8b T
+READY
+
+/os: + match .45 2129 nrb 2114 nra 8b T
+READY
+: +ack:  tell /td sr 1 1 => tell /td sr 1 1
+READY
+
+/td: sr: schedule for round 1 in tournament 1:
+|
+|round   1:
+|  1.1       nrb      nra       ?
+READY
+: +ack:  tell /os match => tell /os match
+READY
+
+/os: match 2/2
+| .44 2129 nrb      2114 nra            8b  T 0
+| .45 2129 nrb      2114 nra            8b  T 0
+READY
+: +ack:  tell /td finger 1 => tell /td finger 1
+READY
+
+/td: finger: 1
+|t ptour1 finger: 
+|id        : 1
+|joining   : open
+|director  : root
+|service   : /os
+|rounds    : 0/2
+|style     : rrobin
+|clock     : 1:00//0:30
+|type      : 8
+|breaks    :  1:00
+|players   : 2 nra nrb 
+|round 1 is being played
+READY
+: +ack:  tell /td sr 2 1 => tell /td sr 2 1
+READY
+
+/td: sr: schedule for round 1 in tournament 2:
+|
+|round   1:
+|  1.1       nrb      nra       ?
+READY
+: +ack:  tell /os match => tell /os match
+READY
+
+/os: match 2/2
+| .44 2129 nrb      2114 nra            8b  T 0
+| .45 2129 nrb      2114 nra            8b  T 0
+READY
+: +ack:  tell /td finger 2 => tell /td finger 2
+READY
+
+/td: finger: 2
+|t ptour1 finger: 
+|id        : 2
+|joining   : open
+|director  : root
+|service   : /os
+|rounds    : 0/2
+|style     : swiss
+|clock     : 1:00//0:30
+|type      : 8
+|breaks    :  1:00
+|players   : 3 nrb nra (bye) 
+|round 1 is being played
+READY
+
+/os: - match .44 2124 nrb 2119 nra 8b T +0.00  .374
+READY
+
+.tourney /td: ending round 1 of tournament 1
+|
+|round   1:
+|  1.1       nrb      nra    +0.0
+READY
+
+.tourney /td: tournament 1 round 2 starts in  1:00
+READY
+
+/os: - match .45 2123 nrb 2121 nra 8b T +0.00  .375
+READY
+
+.tourney /td: ending round 1 of tournament 2
+|
+|round   1:
+|  1.1       nrb      nra    +0.0
+READY
+
+.tourney /td: tournament 2 round 2 starts in  1:00
+READY
+: +ack:  tell /td rankings 1 => tell /td rankings 1
+READY
+
+/td: rankings: tournament 1
+| 0.5 ( 0  1  0) { 0.00 }      nra [0.5000]
+| 0.5 ( 0  1  0) { 0.00 }      nrb [0.5000]
+READY
+: +ack:  tell /td st 1 => tell /td st 1
+READY
+
+/td: st: schedule for tournament 1:
+|
+|round   1:
+|  1.1       nrb      nra    +0.0
+|round   2:
+|  2.1       nra      nrb unstarted
+READY
+: +ack:  tell /td rankings 2 => tell /td rankings 2
+READY
+
+/td: rankings: tournament 2
+| 0.5 ( 0  1  0) { 0.00 }      nrb [0.5000]
+| 0.5 ( 0  1  0) { 0.00 }      nra [0.5000]
+READY
+: +ack:  tell /td st 2 => tell /td st 2
+READY
+
+/td: st: schedule for tournament 2:
+|
+|round   1:
+|  1.1       nrb      nra    +0.0
+READY
+
+.tourney /td: starting round 2 of tournament 1
+READY
+
+.tourney /td: starting round 2 of tournament 2
+READY
+
+/os: + match .46 2121 nra 2123 nrb 8b T
+READY
+
+/os: + match .47 2121 nra 2123 nrb 8b T
+READY
+: +ack:  tell /td sr 1 2 => tell /td sr 1 2
+READY
+
+/td: sr: schedule for round 2 in tournament 1:
+|
+|round   2:
+|  2.1       nra      nrb       ?
+READY
+: +ack:  tell /os match => tell /os match
+READY
+
+/os: match 2/2
+| .46 2121 nra      2123 nrb            8b  T 0
+| .47 2121 nra      2123 nrb            8b  T 0
+READY
+: +ack:  tell /td finger 1 => tell /td finger 1
+READY
+
+/td: finger: 1
+|t ptour1 finger: 
+|id        : 1
+|joining   : open
+|director  : root
+|service   : /os
+|rounds    : 1/2
+|style     : rrobin
+|clock     : 1:00//0:30
+|type      : 8
+|breaks    :  1:00
+|players   : 2 nra nrb 
+|round 2 is being played
+READY
+: +ack:  tell /td sr 2 2 => tell /td sr 2 2
+READY
+
+/td: sr: schedule for round 2 in tournament 2:
+|
+|round   2:
+|  2.1       nra      nrb       ?
+READY
+: +ack:  tell /os match => tell /os match
+READY
+
+/os: match 2/2
+| .46 2121 nra      2123 nrb            8b  T 0
+| .47 2121 nra      2123 nrb            8b  T 0
+READY
+: +ack:  tell /td finger 2 => tell /td finger 2
+READY
+
+/td: finger: 2
+|t ptour1 finger: 
+|id        : 2
+|joining   : open
+|director  : root
+|service   : /os
+|rounds    : 1/2
+|style     : swiss
+|clock     : 1:00//0:30
+|type      : 8
+|breaks    :  1:00
+|players   : 3 nrb nra (bye) 
+|round 2 is being played
+READY
+
+/os: - match .46 2221 nra 2025 nrb 8b T +18.00  .376
+READY
+
+.tourney /td: ending round 2 of tournament 1
+|
+|round   2:
+|  2.1       nra      nrb   +18.0
+READY
+
+.tourney /td: tournament 1 is over. 
+|tell /td r 1 for final rankings, or
+|tell /td st 1 for game-by-game results
+READY
+
+.chat /td: Congratulations to nra, winner of tournament 1
+READY
+
+/os: - match .47 2175 nra 2070 nrb 8b T +0.00  .377
+READY
+
+.tourney /td: ending round 2 of tournament 2
+|
+|round   2:
+|  2.1       nra      nrb    +0.0
+READY
+
+.tourney /td: tournament 2 is over. 
+|tell /td r 2 for final rankings, or
+|tell /td st 2 for game-by-game results
+READY
+
+.chat /td: Congratulations to nrb, winner of tournament 2
+READY
+: +ack:  tell /td rankings 1 => tell /td rankings 1
+READY
+
+/td: rankings: tournament 1
+| 1.5 ( 1  1  0) {   9.00 }      nra [0.4102]
+| 0.5 ( 0  1  1) {  -9.00 }      nrb [0.5898]
+READY
+: +ack:  tell /td st 1 => tell /td st 1
+READY
+
+/td: st: schedule for tournament 1:
+|
+|round   1:
+|  1.1       nrb      nra    +0.0
+|round   2:
+|  2.1       nra      nrb   +18.0
+READY
+: +ack:  tell /td rankings 2 => tell /td rankings 2
+READY
+
+/td: rankings: tournament 2
+| 1.0 ( 0  2  0) {   0.00 }      nrb [0.5000]
+| 1.0 ( 0  2  0) {   0.00 }      nra [0.5000]
+READY
+: +ack:  tell /td st 2 => tell /td st 2
+READY
+
+/td: st: schedule for tournament 2:
+|
+|round   1:
+|  1.1       nrb      nra    +0.0
+|round   2:
+|  2.1       nra      nrb    +0.0
+READY
+: +ack:  tell /td tourneys => tell /td tourneys
+READY
+
+/td: tourneys: 2
+|   id director  game #pl   round start             clock       type
+|    1     root   /os   2   2/  2  done        1:00//0:30          8   Winner: nra
+|    2     root   /os   3   2/  2  done        1:00//0:30          8   Winner: nrb
+READY
+: +ack:  tell /td rankings 1 => tell /td rankings 1
+READY
+
+/td: rankings: tournament 1
+| 1.5 ( 1  1  0) {   9.00 }      nra [0.4102]
+| 0.5 ( 0  1  1) {  -9.00 }      nrb [0.5898]
+READY
+: +ack:  tell /td rankings 2 => tell /td rankings 2
+READY
+
+/td: rankings: tournament 2
+| 1.0 ( 0  2  0) {   0.00 }      nrb [0.5000]
+| 1.0 ( 0  2  0) {   0.00 }      nra [0.5000]
+READY
+: +ack:  tell /td st 2 => tell /td st 2
+READY
+
+/td: st: schedule for tournament 2:
+|
+|round   1:
+|  1.1       nrb      nra    +0.0
+|round   2:
+|  2.1       nra      nrb    +0.0
+READY
+: +ack:  tell /td sp 1 nra => tell /td sp 1 nra
+READY
+
+/td: sp: schedule for player nra in tournament 1:
+|
+|  1.1       nrb      nra    +0.0
+|  2.1       nra      nrb   +18.0
+READY
+: +ack:  tell /td sr 1 9 => tell /td sr 1 9
+READY
+
+/td: ERR 18: sr: round does not exist
+READY
+: +ack:  tell /td finger 1 => tell /td finger 1
+READY
+
+/td: finger: 1
+|t ptour1 finger: 
+|id        : 1
+|joining   : open
+|director  : root
+|service   : /os
+|rounds    : 2/2
+|style     : rrobin
+|clock     : 1:00//0:30
+|type      : 8
+|breaks    :  1:00
+|players   : 2 nra nrb 
+|tournament has finished
+READY

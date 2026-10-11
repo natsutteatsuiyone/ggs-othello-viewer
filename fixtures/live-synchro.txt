@@ -1,0 +1,140 @@
+
+
+Generic Game Server (GGS) 
+located at the University of Alberta, Edmonton, Canada
+------------------------------------------------------
+
+Multiplexors on:
+opal.cs.ualberta.ca (129.128.4.58) @ 5000/1/2, 4000/1/2, SSL: 5006
+ftp.nj.nec.com      (138.15.10.2)  @ 4000/1/2, 5000/1/2, SSL: 5006
+
+(C) Igor Durdanovic igord@research.nj.nec.com 
+                    http://ftp.nj.nec.com/homepages/igord/
+(C) Michael Buro    mburo@cs.ualberta.ca 
+                    http://www.cs.ualberta.ca/~mburo/
+
+: Enter login (yours, or one you'd like to use).
+: Enter your password.
+READY
+: help faq
+Frequently Asked Questions
+--------------------------
+
+1) Why is my graphical client no longer working?
+ = This is not IOS anymore .. different protocols.
+
+2) Where can I get a (new) graphical client?
+ = GGS Applet: http://www.neci.nj.nec.com/homepages/mic/ggsa
+
+3) I don't have Java .. what can I do, it seems like lots of typing?
+ = Yes and No. It will take you some time to grasp the power of
+   aliases, but once you have mastered system aliases (type: help alias)
+   your life here will become much easier. You can even write your own
+   aliases!
+
+4) I just want to play Othello, how do I do it? 
+ = You have to talk to Othello Service Server .. (type: tell /os help)
+   If you haven't mastered (system) aliases yet go back to (3).
+
+5) I want to se Othello top list, I type tell /os top and get error?
+ = /os implements all kinds of variants of Othello, you have to tell it
+   what variant you are interested in (type: tell /os top 8)
+
+6) What other games are available?
+ = /os = Othello, /ams = Amazons, /cks = Checkers.
+
+7) What other documentation is available?
+ = Read the help files .. (type: help) they are pretty long .. or read
+   them on the web: http://external.nj.nec.com/homepages/igord/gsa-ggs.htm
+   For service specific help files request them from service!
+   for example type: tell /ams help.    
+READY
+: help help
+Generic Game Server help files
+-------------+----------------------------------------
+file         | description
+-------------+----------------------------------------
+alias          Introduction to system aliases
+cmds           A list of all commands
+faq            Frequently Asked Questions
+format         Format of messages, parsing specification (outdated)
+ghost          Ghost player concept for tournaments
+gui            List of Graphical and other clients for GGS
+help           This file
+news           Latest news
+old.news       Archived news
+ssl            How to connect to GGS using encrypted channel
+
+Full Docs: http://external.nj.nec.com/homepages/igord/gsa-ggs.htm
+Mic's GGSApplet: http://www.neci.nj.nec.com/homepages/mic/ggsa
+ 
+READY
+: help news
+GGS News ( also "help old.news" )
+
+25/Apr/2004    New GGSA version (thanks Daniel). See http://www.cs.ualberta.ca/~mburo/ggsa
+25/June/2007   GGS has moved to bodo1.cs.ualberta.ca .
+5/July/2010    GGS has moved to skatgame.net, ports 4000 & 5000
+
+** To REGISTER: give your name & email to an admin (type: group _admin)
+** GUIs & Clients (help gui), Secure Socket Layer (help ssl)
+** Source and game-archives: http://www.cs.ualberta.ca/~mburo/GGS
+READY
+: +ack:  vt100 - => vt100 -
+READY
+: +ack:  tell /os vt100 - => tell /os vt100 -
+READY
+: +ack:  tell /os client + => tell /os client +
+READY
+: +ack:  tell /os track + * => tell /os track + *
+READY
+: +ack:  tell /os notify + * => tell /os notify + *
+READY
+: +ack:  tell /os watch + * => tell /os watch + *
+READY
+
+/os: watch + ERR not found: *
+READY
+
+/os: + match .5 1720 pbot 1720 edax s8r10 U
+READY
+
+/os: join .5.0 (;GM[Othello]PC[GGS/os]DT[2026.09.30_13:31:12.UTC]
+|PB[pbot]PW[edax]
+|RB[1720]RW[1720]
+|TI[03:00//02:00]
+|TY[s8r10]RE[?]
+|BO[8 -------- -------- --OO**-- --**O--- ---O**-- -------- -------- -------- *]
+|;)
+READY
+
+/os: join .5.1 (;GM[Othello]PC[GGS/os]DT[2026.09.30_13:31:12.UTC]
+|PB[edax]PW[pbot]
+|RB[1720]RW[1720]
+|TI[03:00//02:00]
+|TY[s8r10]RE[?]
+|BO[8 -------- -------- --OO**-- --**O--- ---O**-- -------- -------- -------- *]
+|;)
+READY
+: +ack:  tell /os match => tell /os match
+READY
+
+/os: match 1/1
+|  .5 1720 pbot     1720 edax        s8r10  U 1
+READY
+: +ack:  tell /os watch + .5 => tell /os watch + .5
+READY
+: +ack:  tell /os watch => tell /os watch
+READY
+
+/os: watch 1 : .5(1)
+READY
+
+/os: end .5.0 ( pbot vs. edax ) -64.00
+READY
+
+/os: end .5.1 ( pbot vs. edax ) -64.00
+READY
+
+/os: - match .5 1720 pbot 1720 edax s8r10 U -64.00
+READY

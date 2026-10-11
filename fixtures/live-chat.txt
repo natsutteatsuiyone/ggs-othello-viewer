@@ -1,0 +1,221 @@
+
+
+Generic Game Server (GGS) 
+located at the University of Alberta, Edmonton, Canada
+------------------------------------------------------
+
+Multiplexors on:
+opal.cs.ualberta.ca (129.128.4.58) @ 5000/1/2, 4000/1/2, SSL: 5006
+ftp.nj.nec.com      (138.15.10.2)  @ 4000/1/2, 5000/1/2, SSL: 5006
+
+(C) Igor Durdanovic igord@research.nj.nec.com 
+                    http://ftp.nj.nec.com/homepages/igord/
+(C) Michael Buro    mburo@cs.ualberta.ca 
+                    http://www.cs.ualberta.ca/~mburo/
+
+: Enter login (yours, or one you'd like to use).
+: Enter your password.
+READY
+: help faq
+Frequently Asked Questions
+--------------------------
+
+1) Why is my graphical client no longer working?
+ = This is not IOS anymore .. different protocols.
+
+2) Where can I get a (new) graphical client?
+ = GGS Applet: http://www.neci.nj.nec.com/homepages/mic/ggsa
+
+3) I don't have Java .. what can I do, it seems like lots of typing?
+ = Yes and No. It will take you some time to grasp the power of
+   aliases, but once you have mastered system aliases (type: help alias)
+   your life here will become much easier. You can even write your own
+   aliases!
+
+4) I just want to play Othello, how do I do it? 
+ = You have to talk to Othello Service Server .. (type: tell /os help)
+   If you haven't mastered (system) aliases yet go back to (3).
+
+5) I want to se Othello top list, I type tell /os top and get error?
+ = /os implements all kinds of variants of Othello, you have to tell it
+   what variant you are interested in (type: tell /os top 8)
+
+6) What other games are available?
+ = /os = Othello, /ams = Amazons, /cks = Checkers.
+
+7) What other documentation is available?
+ = Read the help files .. (type: help) they are pretty long .. or read
+   them on the web: http://external.nj.nec.com/homepages/igord/gsa-ggs.htm
+   For service specific help files request them from service!
+   for example type: tell /ams help.    
+READY
+: help help
+Generic Game Server help files
+-------------+----------------------------------------
+file         | description
+-------------+----------------------------------------
+alias          Introduction to system aliases
+cmds           A list of all commands
+faq            Frequently Asked Questions
+format         Format of messages, parsing specification (outdated)
+ghost          Ghost player concept for tournaments
+gui            List of Graphical and other clients for GGS
+help           This file
+news           Latest news
+old.news       Archived news
+ssl            How to connect to GGS using encrypted channel
+
+Full Docs: http://external.nj.nec.com/homepages/igord/gsa-ggs.htm
+Mic's GGSApplet: http://www.neci.nj.nec.com/homepages/mic/ggsa
+ 
+READY
+: help news
+GGS News ( also "help old.news" )
+
+25/Apr/2004    New GGSA version (thanks Daniel). See http://www.cs.ualberta.ca/~mburo/ggsa
+25/June/2007   GGS has moved to bodo1.cs.ualberta.ca .
+5/July/2010    GGS has moved to skatgame.net, ports 4000 & 5000
+
+** To REGISTER: give your name & email to an admin (type: group _admin)
+** GUIs & Clients (help gui), Secure Socket Layer (help ssl)
+** Source and game-archives: http://www.cs.ualberta.ca/~mburo/GGS
+READY
+: +ack:  vt100 - => vt100 -
+READY
+: +ack:  tell /os vt100 - => tell /os vt100 -
+READY
+: +ack:  tell /os client + => tell /os client +
+READY
+: help help
+Generic Game Server help files
+-------------+----------------------------------------
+file         | description
+-------------+----------------------------------------
+alias          Introduction to system aliases
+cmds           A list of all commands
+faq            Frequently Asked Questions
+format         Format of messages, parsing specification (outdated)
+ghost          Ghost player concept for tournaments
+gui            List of Graphical and other clients for GGS
+help           This file
+news           Latest news
+old.news       Archived news
+ssl            How to connect to GGS using encrypted channel
+
+Full Docs: http://external.nj.nec.com/homepages/igord/gsa-ggs.htm
+Mic's GGSApplet: http://www.neci.nj.nec.com/homepages/mic/ggsa
+ 
+: +ack:  help => help
+READY
+: help news
+GGS News ( also "help old.news" )
+
+25/Apr/2004    New GGSA version (thanks Daniel). See http://www.cs.ualberta.ca/~mburo/ggsa
+25/June/2007   GGS has moved to bodo1.cs.ualberta.ca .
+5/July/2010    GGS has moved to skatgame.net, ports 4000 & 5000
+
+** To REGISTER: give your name & email to an admin (type: group _admin)
+** GUIs & Clients (help gui), Secure Socket Layer (help ssl)
+** Source and game-archives: http://www.cs.ualberta.ca/~mburo/GGS
+: +ack:  help news => help news
+READY
+: +ack:  tell /os help => tell /os help
+READY
+
+/os: help help
+|Othello Service Server help files
+|
+|-----------+----------------------------------------
+|file       | description
+|-----------+----------------------------------------
+|clock        Clock specification.
+|cmds         A list of all commands
+|format       Format of messages, parsing specification (outdated)
+|formula      Formulas for auto accept/decline
+|help         This file
+|rating       Rating system description
+|types        Supported variants (-> Mic)
+|
+|To access a help file type "tell /os help <file>".
+| 
+|Full Docs: http://external.nj.nec.com/homepages/igord/gsa-ggs.htm
+|Mic's GGSApplet: http://www.neci.nj.nec.com/homepages/mic/ggsa
+READY
+: who    5        idle      online         ip-addr hostname
+/os      +    00:00:01  1.13:42:20
+edax     +    00:00:01  1.13:42:19
+pbot4    -    00:00:01    00:00:19
+pchat1   -    00:00:00    00:00:10 172.018.000.001  <=
+pchat2   -    00:00:05    00:00:07
+: +ack:  who => who
+READY
+: ERR command 'frobnicate' not recognized.
+: +ack:  frobnicate => frobnicate
+READY
+: +ack:  tell /os watch + .1 => tell /os watch + .1
+READY
+
+/os: join .1 (;GM[Othello]PC[GGS/os]DT[2026.10.01_03:43:01.UTC]
+|PB[pbot4]PW[edax]
+|RB[1720]RW[2072.68]
+|TI[05:00//02:00]
+|TY[8]RE[?]
+|BO[8 -------- -------- -------- ---O*--- ---*O--- -------- -------- -------- *]
+|B[d3//4.47]W[c5]B[b6//3.17]W[f3/9.00]
+|B[f4//3.18]W[e3/12.00]B[d2//3.19]W[f5/12.00]
+|B[g3//3.20]W[c4/15.00]
+|;)
+READY
+
+/os: update .1 c3//3.20
+READY
+
+/os: update .1 e2/15.00
+READY
+: +ack:  tell .chat hello channel => tell .chat hello channel
+READY
+
+.chat pchat2: reply from b
+READY
+
+/os: update .1 d1//3.20
+READY
+
+/os: update .1 f2/16.00
+READY
+: +ack:  tell pchat2 hi b => tell pchat2 hi b
+READY
+
+pchat2: hi a
+READY
+
+pchat1: note to self
+READY
+: +ack:  tell pchat1 note to self => tell pchat1 note to self
+READY
+
+pchat2: two
+|lines
+READY
+
+/os: update .1 e1//3.20
+READY
+
+/os: update .1 b5/16.00
+READY
+: +ack:  tell /os tell .1 kibitz to all => tell /os tell .1 kibitz to all
+READY
+: +ack:  tell /os tell o .1 observers only => tell /os tell o .1 observers only
+READY
+
+/os: .1 A 1720 pchat2: from b
+READY
+
+/os: .1 O 1720 pchat2: b to observers
+READY
+
+/os: update .1 b4//2.96
+READY
+
+/os: update .1 c2/21.00
+READY
