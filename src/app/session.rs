@@ -302,7 +302,7 @@ impl Viewer {
                 // suspend() dropped the lists the open rail and Games sheet show.
                 self.refresh_rail(false, cx);
                 if let Some(Sheet::Games(login)) = &self.sheet {
-                    self.open_games(login.clone(), false, cx);
+                    self.open_games(login.clone(), cx);
                 }
             }
             ServerMsg::Presence { os: Some(false) } => {

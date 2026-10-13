@@ -17,7 +17,7 @@ use rusqlite::Connection;
 use crate::chat::{Chat, ChatKey, ChatLine, Conversation, DEFAULT_CHANNEL, Said, Unread};
 use crate::game::{At, Game, GameSource, GameViews, Nav, Phase};
 use crate::history::{Entry, History};
-use crate::lobby::{AppCommand, FinishedMatch, Lobby, OsState, ViewMode, match_of};
+use crate::lobby::{AppCommand, FinishedMatch, Lobby, OsState, ViewMode, games_of, match_of};
 use crate::net::{self, Link, LoginParams, NetEvent, is_secret};
 use crate::othello::{Cell, Color, Square};
 use crate::proto::{
@@ -528,15 +528,10 @@ impl Viewer {
         }
     }
 
-    fn open_games(&mut self, login: String, refresh: bool, cx: &mut Context<Self>) {
-        let cmds = match &self.session.screen {
-            Screen::Connected(_) => self.session.lobby.games_of(&login, refresh),
-            _ => Vec::new(),
-        };
-        // Opening only fills in what is missing, so it must not use up Refresh's cooldown.
-        let key = if refresh { format!("games {login}") } else { format!("open {login}") };
-        if !cmds.is_empty() && self.allow_read(key) {
-            for cmd in cmds {
+    /// Shows `login`'s page with what is loaded and asks for it afresh.
+    fn open_games(&mut self, login: String, cx: &mut Context<Self>) {
+        if self.allow_read(format!("games {login}")) {
+            for cmd in games_of(&login) {
                 self.send(cmd);
             }
         }
@@ -546,7 +541,8 @@ impl Viewer {
 
     /// Shows tournament `id` and asks for what it shows.
     fn open_tourney(&mut self, id: String, cx: &mut Context<Self>) {
-        for read in self.tourney_sheet_reads(&id) {
+        let reads = if self.session.lobby.tourneys.settled(&id) { Vec::new() } else { self.tourney_sheet_reads(&id) };
+        for read in reads {
             if !self.send_read(read) {
                 break;
             }
@@ -676,6 +672,7 @@ impl Viewer {
         self.sheet = None;
         match previous {
             Sheet::Tourney(id) => self.open_tourney(id, cx),
+            Sheet::Games(login) => self.open_games(login, cx),
             sheet => {
                 self.sheet = Some(sheet);
                 cx.notify();
@@ -738,24 +735,23 @@ impl Viewer {
         matches!(self.session.screen, Screen::Connected(..)) && self.session.reads.allow(key, Instant::now())
     }
 
+    /// Shows the rail's loaded list and asks for it afresh; false if there is nothing to show.
+    /// Matches stays current through live notifications, so only `refresh` asks for it.
     fn refresh_rail(&mut self, refresh: bool, cx: &mut Context<Self>) -> bool {
         cx.notify();
         let (rail, t) = (self.rail, self.rating_type);
-        if !refresh && let Some(lobby) = self.session.lobby_mut() {
-            let loaded = match rail {
-                Rail::Matches => true,
-                Rail::Users => lobby.show_users(t, Instant::now()),
-                Rail::Rankings => lobby.show_ranks(t, Instant::now()),
-                Rail::Tourneys => lobby.tourneys.list.is_some(),
-                Rail::Chat => true,
-            };
-            if loaded {
-                return true;
-            }
+        if !refresh && rail == Rail::Matches {
+            return true;
         }
-        let Some((key, command)) = rail_read(rail, t) else { return false };
+        let loaded = self.session.lobby_mut().is_some_and(|lobby| match rail {
+            Rail::Users => lobby.show_users(t, Instant::now()),
+            Rail::Rankings => lobby.show_ranks(t, Instant::now()),
+            Rail::Tourneys => lobby.tourneys.list.is_some(),
+            Rail::Matches | Rail::Chat => true,
+        });
+        let Some((key, command)) = rail_read(rail, t) else { return loaded };
         if !self.allow_read(key) {
-            return false;
+            return loaded;
         }
         self.with_lobby(cx, |_| vec![command]);
         true
@@ -849,9 +845,9 @@ impl Viewer {
                             ui::icon_button("my-games", ui::IconName::User, "My games", false, online).when_some(
                                 me,
                                 |b, me| {
-                                    b.on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                                        this.open_games(me.clone(), false, cx)
-                                    }))
+                                    b.on_click(
+                                        cx.listener(move |this, _: &ClickEvent, _, cx| this.open_games(me.clone(), cx)),
+                                    )
                                 },
                             ),
                         )

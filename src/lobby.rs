@@ -186,6 +186,17 @@ fn add_watch(watched: &mut Vec<String>, match_id: &str) {
     watched.push(match_id.to_string());
 }
 
+/// What a user's page asks for: profile, match settings and archived games.
+pub fn games_of(login: &str) -> [AppCommand; 4] {
+    [
+        format!("finger {login}"),
+        proto::tell(&format!("finger {login}")),
+        proto::tell(&format!("history {login}")),
+        proto::tell(&format!("stored {login}")),
+    ]
+    .map(AppCommand::Line)
+}
+
 /// How long an unanswered `who`/`top` counts as on its way, matching the app's request cooldown.
 const ASK_PENDING: Duration = Duration::from_secs(5);
 
@@ -481,19 +492,6 @@ impl Lobby {
             return Vec::new();
         }
         vec![AppCommand::Look(key.to_string())]
-    }
-
-    /// What a user's page asks for: profile, match settings and archived games.
-    pub fn games_of(&self, login: &str, refresh: bool) -> Vec<AppCommand> {
-        [
-            (format!("finger {login}"), self.profiles.contains_key(login)),
-            (proto::tell(&format!("finger {login}")), self.match_settings.contains_key(login)),
-            (proto::tell(&format!("history {login}")), self.history.contains_key(login)),
-            (proto::tell(&format!("stored {login}")), self.stored.contains_key(login)),
-        ]
-        .into_iter()
-        .filter_map(|(cmd, loaded)| (refresh || !loaded).then_some(AppCommand::Line(cmd)))
-        .collect()
     }
 
     /// Stops watching the match that `id` belongs to and forgets its games. The user's own match is

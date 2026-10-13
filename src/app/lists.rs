@@ -63,7 +63,7 @@ impl Viewer {
                                     .debug_selector(|| "refresh-games".into())
                                     .on_click(cx.listener({
                                         let login = login.to_string();
-                                        move |this, _: &ClickEvent, _, cx| this.open_games(login.clone(), true, cx)
+                                        move |this, _: &ClickEvent, _, cx| this.open_games(login.clone(), cx)
                                     })),
                             )
                             .child(
@@ -485,7 +485,7 @@ pub(super) fn rank_row(r: &Rank, cx: &mut Context<Viewer>) -> Stateful<Div> {
         .bg(ui::surface())
         .cursor_pointer()
         .hover(|s| s.bg(ui::cursor_bg()))
-        .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.open_games(name.clone(), false, cx)))
+        .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.open_games(name.clone(), cx)))
         .child(
             div()
                 .h_flex()
@@ -740,7 +740,7 @@ fn standings_table(t: &td::Tourneys, id: &str, schedule: &[td::Pairing], cx: &mu
                 .pr_3()
                 .cursor_pointer()
                 .hover(|s| s.bg(ui::cursor_bg()))
-                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.open_games(name.clone(), false, cx)))
+                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.open_games(name.clone(), cx)))
                 .child(
                     div()
                         .w(px(22.))
@@ -1177,7 +1177,7 @@ pub(super) fn user_row(i: usize, u: &User, cx: &mut Context<Viewer>) -> Stateful
         .bg(ui::surface())
         .cursor_pointer()
         .hover(|s| s.bg(ui::cursor_bg()))
-        .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.open_games(name.clone(), false, cx)))
+        .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.open_games(name.clone(), cx)))
         .child(
             div()
                 .h_flex()

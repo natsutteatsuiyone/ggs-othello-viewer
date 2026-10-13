@@ -207,6 +207,13 @@ impl Tourneys {
             || self.info(id).is_some_and(|i| i.status == "tournament has finished")
     }
 
+    /// Whether `id`'s page is loaded after its end, so it no longer changes.
+    pub fn settled(&self, id: &str) -> bool {
+        self.info(id).is_some_and(|i| i.status == "tournament has finished")
+            && self.schedules.contains_key(id)
+            && self.standings.contains_key(id)
+    }
+
     /// Finger's status with its countdown run down to `now`.
     pub fn status(&self, id: &str, now: Instant) -> Option<String> {
         let info = self.info.get(id)?;

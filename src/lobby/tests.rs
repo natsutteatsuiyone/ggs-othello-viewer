@@ -894,7 +894,7 @@ fn looked_up_games_replay_as_ended_games() {
     assert_eq!(notes.len(), 1, "an unplayable record is reported");
     assert_eq!(lobby.focus, None, "and the view does not wait for it");
     assert_eq!(
-        lines(Lobby::default().games_of("prated", false)),
+        lines(super::games_of("prated").into()),
         ["finger prated", "tell /os finger prated", "tell /os history prated", "tell /os stored prated"]
     );
 }

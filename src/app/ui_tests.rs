@@ -90,8 +90,8 @@ fn repeated_refreshes_and_user_pages_limit_server_requests(cx: &mut TestAppConte
                 !v.log.iter().flat_map(|b| &b.lines).any(|line| line.starts_with("> tell /os finger")),
                 "listing users never requests their details"
             );
-            v.open_games("alice".into(), false, cx);
-            v.open_games("alice".into(), false, cx);
+            v.open_games("alice".into(), cx);
+            v.open_games("alice".into(), cx);
             let sent = |v: &Viewer, cmd: &str| v.log.iter().flat_map(|b| &b.lines).filter(|line| *line == cmd).count();
             assert_eq!(sent(v, "> tell /os who 8 a"), 1);
             assert_eq!(sent(v, "> tell /os finger alice"), 1, "only opening the page requests details");
@@ -103,7 +103,10 @@ fn repeated_refreshes_and_user_pages_limit_server_requests(cx: &mut TestAppConte
             v.refresh_rail(true, cx);
             assert_eq!(sent(v, "> tell /os who 8 a"), 2);
             v.refresh_rail(false, cx);
-            assert_eq!(sent(v, "> tell /os who 8 a"), 2, "tab navigation reuses the loaded list");
+            assert_eq!(sent(v, "> tell /os who 8 a"), 2, "tab navigation within the cooldown reuses the loaded list");
+            v.session.reads.sent.insert("who 8".into(), Instant::now() - std::time::Duration::from_secs(5));
+            v.refresh_rail(false, cx);
+            assert_eq!(sent(v, "> tell /os who 8 a"), 3, "tab navigation asks for the loaded list afresh");
             v.rating_type = crate::proto::RatingType::EightRandom;
             v.refresh_rail(false, cx);
             v.refresh_rail(false, cx);
@@ -115,8 +118,9 @@ fn repeated_refreshes_and_user_pages_limit_server_requests(cx: &mut TestAppConte
                 lobby.stored.insert("alice".into(), Vec::new());
             }
             v.session.reads.sent.remove("games alice");
-            v.open_games("alice".into(), false, cx);
-            assert_eq!(sent(v, "> finger alice"), 1, "reopening a loaded page sends nothing");
+            v.open_games("alice".into(), cx);
+            assert_eq!(sent(v, "> finger alice"), 2, "reopening a loaded page asks for it afresh");
+            v.session.reads.sent.remove("games alice");
         })
     });
     settle(cx);
@@ -142,7 +146,7 @@ fn repeated_refreshes_and_user_pages_limit_server_requests(cx: &mut TestAppConte
         {
             assert_eq!(
                 v.log.iter().flat_map(|b| &b.lines).filter(|line| *line == cmd).count(),
-                2,
+                3,
                 "explicit page refresh fetches fresh data once: {cmd}"
             );
         }
@@ -161,7 +165,7 @@ fn repeated_refreshes_and_user_pages_limit_server_requests(cx: &mut TestAppConte
             v.refresh_rail(false, cx);
             assert_eq!(
                 v.log.iter().flat_map(|b| &b.lines).filter(|line| *line == "> tell /os who 8 a").count(),
-                3,
+                4,
                 "a service restart clears cached lists and cooldowns"
             );
         })
@@ -3077,7 +3081,7 @@ fn back_retraces_every_page_opened_from_another_page(cx: &mut TestAppContext) {
     settle(cx);
     click("standing-1", cx);
     click("refresh-games", cx);
-    cx.update(|_, cx| viewer.update(cx, |v, cx| v.open_games("me".into(), false, cx)));
+    cx.update(|_, cx| viewer.update(cx, |v, cx| v.open_games("me".into(), cx)));
     settle(cx);
     cx.update(|_, cx| assert!(matches!(&viewer.read(cx).sheet, Some(super::Sheet::Games(login)) if login == "me")));
     click("back", cx);
@@ -3359,7 +3363,7 @@ fn os_return_refetches_the_open_rail_and_games_sheet(cx: &mut TestAppContext) {
     cx.update(|_, cx| {
         viewer.update(cx, |v, cx| {
             v.rail = Rail::Users;
-            v.open_games("alice".into(), false, cx);
+            v.open_games("alice".into(), cx);
             v.refresh_rail(false, cx);
             v.on_message(vec![": - /os 1".into()], cx);
             v.on_message(vec![": + /os 1".into()], cx);
@@ -3375,7 +3379,7 @@ fn disconnect_forgets_the_sheet_and_back_history(cx: &mut TestAppContext) {
     let (viewer, cx) = fixture(cx);
     cx.update(|_, cx| {
         viewer.update(cx, |v, cx| {
-            v.open_games("alice".into(), false, cx);
+            v.open_games("alice".into(), cx);
             v.open_tourney("12".into(), cx);
             assert_eq!(v.back.len(), 1);
             v.disconnect(cx);
@@ -3606,4 +3610,40 @@ fn bench_tourney_scroll(cx: &mut TestAppContext) {
         });
     }
     eprintln!("BENCH tourney scroll: {:.2} ms/frame", start.elapsed().as_secs_f64() * 1000. / frames as f64);
+}
+
+#[gpui_kit::test]
+fn a_finished_tournament_reopens_from_its_loaded_page(cx: &mut TestAppContext) {
+    let (viewer, cx) = fixture(cx);
+    cx.update(|_, cx| {
+        viewer.update(cx, |v, cx| {
+            let finger = |status: &str| {
+                lines(&[
+                    "/td: finger: 4",
+                    "t me finger: ",
+                    "id        : 4",
+                    "joining   : closed",
+                    "director  : root",
+                    "rounds    : 1/1",
+                    "style     : rrobin",
+                    "clock     : 1:00//0:30",
+                    "type      : 8",
+                    "players   : 2 alice bob",
+                    status,
+                ])
+            };
+            let sent = |v: &Viewer| v.log.iter().flat_map(|b| &b.lines).filter(|l| *l == "> tell /td finger 4").count();
+            v.on_message(finger("tournament has finished"), cx);
+            v.session.lobby.tourneys.schedules.insert("4".into(), Vec::new());
+            v.open_tourney("4".into(), cx);
+            assert_eq!(sent(v), 1, "without standings the page is not loaded yet");
+            v.session.lobby.tourneys.standings.insert("4".into(), Vec::new());
+            v.session.reads.sent.clear();
+            v.open_tourney("4".into(), cx);
+            assert_eq!(sent(v), 1, "a finished tournament's loaded page no longer changes");
+            v.on_message(finger("round 1 running"), cx);
+            v.open_tourney("4".into(), cx);
+            assert_eq!(sent(v), 2, "a running tournament is asked for afresh");
+        })
+    });
 }
