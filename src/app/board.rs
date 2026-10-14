@@ -111,10 +111,11 @@ pub(super) struct BoardOpts {
 pub(super) fn render_board(game: &Game, at: At, BoardOpts { cell, hints, flipped, coords }: BoardOpts) -> Div {
     let b = game.board(at);
     let last = game.last_square(at);
-    // The position before `at`, to animate the move that led to it. Keying each animation on the
-    // move number restarts it whenever a new move arrives or the cursor steps.
-    let ply = at.unwrap_or(game.moves().len()).min(game.moves().len());
-    let before = ply.checked_sub(1).map(|p| game.board(Some(p)));
+    // The position before the live one, to animate a move as it arrives; a finished game or a
+    // stepped-back cursor stays still. Keying each animation on the move number restarts it per move.
+    let ply = game.moves().len();
+    let live = game.phase == Phase::Live && at.is_none();
+    let before = ply.checked_sub(1).filter(|_| live).map(|p| game.board(Some(p)));
     let hints = hints && game.shows_turn(at);
     let sq_size = cell - ui::BOARD_GAP;
     let label = |w: f32, h: f32, s: String| {
@@ -155,7 +156,7 @@ pub(super) fn render_board(game: &Game, at: At, BoardOpts { cell, hints, flipped
                             let size = (sq_size * ui::DISC_RATIO).floor();
                             let id = SharedString::from(format!("disc-{}-{ply}-{x}-{y}", game.id));
                             match (last, before.map(|p| p.cell(x, y))) {
-                                (Some(sq), _) if sq == here => s.child(placed_disc(id, color, size)),
+                                (Some(sq), Some(_)) if sq == here => s.child(placed_disc(id, color, size)),
                                 (Some(sq), Some(Cell::Disc(was))) if was != color => {
                                     let ring = sq.x.abs_diff(x).max(sq.y.abs_diff(y));
                                     s.child(flipping_disc(id, was, color, size, ring))
