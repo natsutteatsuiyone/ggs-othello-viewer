@@ -111,6 +111,10 @@ pub(super) struct BoardOpts {
 pub(super) fn render_board(game: &Game, at: At, BoardOpts { cell, hints, flipped, coords }: BoardOpts) -> Div {
     let b = game.board(at);
     let last = game.last_square(at);
+    // The position before `at`, to animate the move that led to it. Keying each animation on the
+    // move number restarts it whenever a new move arrives or the cursor steps.
+    let ply = at.unwrap_or(game.moves().len()).min(game.moves().len());
+    let before = ply.checked_sub(1).map(|p| game.board(Some(p)));
     let hints = hints && game.shows_turn(at);
     let sq_size = cell - ui::BOARD_GAP;
     let label = |w: f32, h: f32, s: String| {
@@ -147,7 +151,18 @@ pub(super) fn render_board(game: &Game, at: At, BoardOpts { cell, hints, flipped
                             Cell::Disc(color) => Some(color),
                             _ => None,
                         },
-                        |s, color| s.child(ui::disc(color, (sq_size * ui::DISC_RATIO).floor())),
+                        |s, color| {
+                            let size = (sq_size * ui::DISC_RATIO).floor();
+                            let id = SharedString::from(format!("disc-{}-{ply}-{x}-{y}", game.id));
+                            match (last, before.map(|p| p.cell(x, y))) {
+                                (Some(sq), _) if sq == here => s.child(placed_disc(id, color, size)),
+                                (Some(sq), Some(Cell::Disc(was))) if was != color => {
+                                    let ring = sq.x.abs_diff(x).max(sq.y.abs_diff(y));
+                                    s.child(flipping_disc(id, was, color, size, ring))
+                                }
+                                _ => s.child(ui::disc(color, size)),
+                            }
+                        },
                     )
                     .when(last == Some(here), |s| {
                         s.child(
@@ -188,6 +203,36 @@ pub(super) fn render_board(game: &Game, at: At, BoardOpts { cell, hints, flipped
         return grid;
     }
     div().flex_none().v_flex().child(files()).child(div().flex().items_start().child(ranks()).child(grid))
+}
+
+const POP: Duration = Duration::from_millis(220);
+const FLIP: Duration = Duration::from_millis(260);
+/// Each ring of distance from the placed disc starts its flip this much later.
+const RIPPLE: Duration = Duration::from_millis(60);
+
+/// The disc just played, popping in with a small overshoot.
+fn placed_disc(id: SharedString, color: Color, size: f32) -> impl IntoElement {
+    ui::disc(color, size).with_animation(id, Animation::new(POP), move |d, t| {
+        let back = t - 1.;
+        let scale = 1. + 2.7 * back.powi(3) + 1.7 * back.powi(2);
+        d.size(px(size * scale))
+    })
+}
+
+/// A disc turning over: it narrows to an edge in its old color, then widens in its new one,
+/// waiting its turn by `ring` so the flips ripple out from the move.
+fn flipping_disc(id: SharedString, was: Color, now: Color, size: f32, ring: usize) -> impl IntoElement {
+    let delay = RIPPLE * ring as u32;
+    let total = POP + delay + FLIP;
+    let edge = move |t: f32| {
+        let local = (t * total.as_secs_f32() - (POP + delay).as_secs_f32()) / FLIP.as_secs_f32();
+        ease_in_out(local.clamp(0., 1.))
+    };
+    div().with_animation(id, Animation::new(total), move |_, t| {
+        let t = edge(t);
+        let (color, width) = if t < 0.5 { (was, 1. - 2. * t) } else { (now, 2. * t - 1.) };
+        ui::disc(color, size).w(px((size * width).max(1.)))
+    })
 }
 
 /// Two boxes side by side; the side to move is outlined in the accent color, and a running clock
