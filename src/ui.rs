@@ -261,7 +261,9 @@ pub fn install(light: bool, cx: &mut App) {
         t.accent_foreground = ink().into();
         t.ring = accent().into();
         t.tab_bar = bg().into();
-        t.tab_bar_segmented = bg().into();
+        // The selected segment is drawn in `background`; on the light page a track of that same
+        // color left it a faint shadow, so the light track is a shade darker.
+        t.tab_bar_segmented = if light { line() } else { bg() }.into();
         t.tab_active = line().into();
         t.tab_active_foreground = accent().into();
         t.tab_foreground = muted().into();
