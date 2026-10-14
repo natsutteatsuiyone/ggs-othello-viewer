@@ -73,7 +73,7 @@ impl fmt::Display for Move {
 }
 
 /// A move as the server sends it: `move[/eval[/time]]`. An empty time means 0;
-/// GGS omits zero evals, so an empty eval means 0; non-finite evals are discarded.
+/// GGS omits zero evals, so an empty eval means 0; non-finite evals are discarded. A pass is forced and carries no eval.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct MoveToken {
     pub mv: Move,
@@ -104,8 +104,8 @@ impl MoveToken {
                 Some(v) => v.parse().map(Some).map_err(|_| format!("bad number '{v}' in move '{s}'")),
             }
         };
-        let stated = num()?;
-        let eval = Some(stated.unwrap_or(0.0)).filter(|e| e.is_finite());
+        let stated = num()?.filter(|_| mv != Move::Pass);
+        let eval = Some(stated.unwrap_or(0.0)).filter(|e| e.is_finite() && mv != Move::Pass);
         let stated = stated.is_some();
         let time = num()?.unwrap_or(0.0);
         if !time.is_finite() || time < 0.0 {
@@ -402,10 +402,14 @@ mod tests {
         );
         assert_eq!(MoveToken::parse("d3//3.10").unwrap().to_string(), "d3//3.1", "an omitted evaluation stays omitted");
         assert_eq!(MoveToken::parse("pass").unwrap().mv, Move::Pass);
+        for s in ["PA", "PA/0/1", "PA/-3/1"] {
+            let t = MoveToken::parse(s).unwrap();
+            assert_eq!((t.eval, t.stated), (None, false), "{s}");
+        }
         assert_eq!(sq("a10").to_string(), "a10");
         assert!(MoveToken::parse("d3/x").is_err());
         assert!(MoveToken::parse("").is_err());
-        for s in ["d3/0/3.1", "c5/-1.23/4.5", "PA/0/0", "f4/0.5/0"] {
+        for s in ["d3/0/3.1", "c5/-1.23/4.5", "PA//0", "f4/0.5/0"] {
             assert_eq!(MoveToken::parse(s).unwrap().to_string(), s);
         }
     }

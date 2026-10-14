@@ -965,7 +965,7 @@ mod tests {
             ("d3//6.00", "d3", Some(0.), 6.),
             ("f3/11.00/0.10", "f3", Some(11.), 0.1),
             ("b5/17.00", "b5", Some(17.), 0.),
-            ("pa//1.15", "PA", Some(0.), 1.15),
+            ("pa//1.15", "PA", None, 1.15),
         ] {
             match os(&[&format!("/os: update .4 {tok}")]) {
                 OsMsg::Update { token, .. } => {
