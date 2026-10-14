@@ -2740,6 +2740,167 @@ fn standings_show_movement_and_medals(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn a_round_caption_shows_the_standings_after_that_round(cx: &mut TestAppContext) {
+    let (viewer, cx) = fixture(cx);
+    open_three(&viewer, cx);
+    let click = |cx: &mut VisualTestContext, selector: &'static str| {
+        let bounds = cx.debug_bounds(selector).unwrap();
+        cx.simulate_click(bounds.center(), Default::default());
+        settle(cx);
+    };
+    // Ranked c, a, b now; c and a met in round 2. After round 1 a leads on its win over b, c's rest
+    // has no tiebreak, and round 2 is left out.
+    let current = |cx: &mut VisualTestContext| cx.debug_bounds("cross-0-1").is_some();
+    assert!(current(cx));
+    click(cx, "round-caption-1");
+    assert!(cx.debug_bounds("cross-0-2").is_some() && cx.debug_bounds("cross-0-1").is_none());
+    click(cx, "round-caption-1");
+    assert!(current(cx), "picking it again goes back");
+    let shown = |cx: &mut VisualTestContext| viewer.read_with(cx, |v, _| v.tourney_round.clone());
+    click(cx, "standings-round");
+    cx.simulate_keystrokes("down enter");
+    settle(cx);
+    assert_eq!(shown(cx), Some(("3".into(), 1)), "the menu beside the standings picks a round too");
+    // Then Up and Down step through the rounds, round 3 being /td's own standings.
+    for (key, round) in [("up", Some(1)), ("down", Some(2)), ("down", None), ("down", None), ("up", Some(2))] {
+        cx.simulate_keystrokes(key);
+        settle(cx);
+        assert_eq!(shown(cx), round.map(|n| ("3".into(), n)), "after {key}");
+    }
+}
+
+#[gpui_kit::test]
+fn the_standings_stay_put_while_a_long_schedule_scrolls(cx: &mut TestAppContext) {
+    let (viewer, cx) = fixture(cx);
+    open_three(&viewer, cx);
+    let mut schedule = vec!["/td: st: schedule for tournament 3:".to_string(), String::new()];
+    for r in 1..=30 {
+        schedule.push(format!("round {r:3}:"));
+        schedule.push(format!("  {r}.1 a b +2.0"));
+        schedule.push(format!("  {r}.2 c (bye) bye"));
+    }
+    cx.update(|_, cx| viewer.update(cx, |v, cx| v.on_message(schedule, cx)));
+    settle(cx);
+    let (rounds, center) = (cx.debug_bounds("rounds").unwrap(), cx.debug_bounds("center").unwrap());
+    assert!(rounds.bottom() <= center.bottom(), "the rounds scroll in their own box: {rounds:?} in {center:?}");
+    let standing = cx.debug_bounds("standing-0").unwrap();
+    assert!(cx.debug_bounds("round-caption-30").unwrap().top() > center.bottom(), "the last round is below");
+    let position = rounds.center();
+    cx.simulate_mouse_move(position, None, Default::default());
+    for _ in 0..40 {
+        cx.update(|window, cx| {
+            window.dispatch_event(
+                ScrollWheelEvent {
+                    position,
+                    delta: ScrollDelta::Pixels(point(px(0.), px(-400.))),
+                    ..Default::default()
+                }
+                .to_platform_input(),
+                cx,
+            );
+        });
+        settle(cx);
+    }
+    let last = cx.debug_bounds("round-caption-30").unwrap();
+    assert!(last.bottom() <= center.bottom(), "scrolled to the last round: {last:?}");
+    assert_eq!(cx.debug_bounds("standing-0").unwrap(), standing, "the standings did not move");
+    let before_last = cx.debug_bounds("round-caption-29").unwrap();
+    cx.simulate_click(before_last.center(), Default::default());
+    settle(cx);
+    assert_eq!(cx.debug_bounds("standing-0").unwrap(), standing, "and stay in view after a pick");
+    assert!(viewer.read_with(cx, |v, _| v.tourney_round == Some(("3".into(), 29))));
+}
+
+#[gpui_kit::test]
+fn a_big_field_scrolls_its_standings_and_keeps_room_for_the_rounds(cx: &mut TestAppContext) {
+    let (viewer, cx) = fixture(cx);
+    let players: Vec<String> = (0..30).map(|i| format!("p{i:02}")).collect();
+    let mut schedule = vec!["/td: st: schedule for tournament 5:".to_string(), String::new()];
+    for r in 1..=10 {
+        schedule.push(format!("round {r:3}:"));
+        for b in 0..15 {
+            schedule.push(format!("  {r}.{} {} {} +2.0", b + 1, players[2 * b], players[2 * b + 1]));
+        }
+    }
+    let field = format!("players   : 30 {}", players.join(" "));
+    cx.update(|_, cx| {
+        viewer.update(cx, |v, cx| {
+            v.on_message(
+                lines(&[
+                    "/td: finger: 5",
+                    "t me finger: ",
+                    "id        : 5",
+                    "joining   : closed",
+                    "director  : root",
+                    "rounds    : 10/10",
+                    "style     : swiss",
+                    "clock     : 1:00//0:30",
+                    "type      : 8",
+                    &field,
+                    "tournament has finished",
+                ]),
+                cx,
+            );
+            v.open_tourney("5".into(), cx);
+            v.on_message(schedule, cx);
+        })
+    });
+    settle(cx);
+    let (rounds, center) = (cx.debug_bounds("rounds").unwrap(), cx.debug_bounds("center").unwrap());
+    assert!(rounds.bottom() <= center.bottom(), "the rounds keep their room: {rounds:?} in {center:?}");
+    let first = cx.debug_bounds("standing-0").unwrap();
+    let position = first.center();
+    cx.simulate_mouse_move(position, None, Default::default());
+    cx.update(|window, cx| {
+        window.dispatch_event(
+            ScrollWheelEvent { position, delta: ScrollDelta::Pixels(point(px(0.), px(-200.))), ..Default::default() }
+                .to_platform_input(),
+            cx,
+        );
+    });
+    settle(cx);
+    assert!(cx.debug_bounds("standing-0").unwrap().top() < first.top(), "the standings scroll");
+    assert_eq!(cx.debug_bounds("rounds").unwrap(), rounds, "in their own box");
+}
+
+#[gpui_kit::test]
+fn the_games_per_pair_hold_whichever_round_is_shown(cx: &mut TestAppContext) {
+    let (viewer, cx) = fixture(cx);
+    open_three(&viewer, cx);
+    // A double round robin half played: every pair meets twice, only the first meetings decided.
+    let schedule = [
+        "/td: st: schedule for tournament 3:",
+        "",
+        "round   1:",
+        "  1.1 a b +2.0",
+        "  1.2 c (bye) bye",
+        "round   2:",
+        "  2.1 c a -4.0",
+        "  2.2 b (bye) bye",
+        "round   3:",
+        "  3.1 b c +6.0",
+        "  3.2 a (bye) bye",
+        "round   4:",
+        "  4.1 b a ?",
+        "  4.2 c (bye) bye",
+        "round   5:",
+        "  5.1 a c ?",
+        "  5.2 b (bye) bye",
+        "round   6:",
+        "  6.1 c b ?",
+        "  6.2 a (bye) bye",
+    ];
+    cx.update(|_, cx| viewer.update(cx, |v, cx| v.on_message(lines(&schedule), cx)));
+    settle(cx);
+    assert!(cx.debug_bounds("cross-games").is_some());
+    for round in [1, 2, 5] {
+        cx.update(|_, cx| viewer.update(cx, |v, cx| v.show_round("3", Some(round), cx)));
+        settle(cx);
+        assert!(cx.debug_bounds("cross-games").is_some(), "after round {round}");
+    }
+}
+
+#[gpui_kit::test]
 fn a_finished_tournament_drops_the_movement_arrows(cx: &mut TestAppContext) {
     let (viewer, cx) = fixture(cx);
     open_three(&viewer, cx);

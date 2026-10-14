@@ -294,13 +294,10 @@ pub fn crosstable(players: &[String], pairings: &[Pairing]) -> Vec<Vec<Vec<CellG
     table
 }
 
-/// The count of decided games that every meeting with any shares, so the cells can leave it out.
-pub fn shared_decided(table: &[Vec<Vec<CellGame>>]) -> Option<usize> {
-    let mut counts = table
-        .iter()
-        .flatten()
-        .map(|games| games.iter().filter(|g| matches!(g, CellGame::Margin(_))).count())
-        .filter(|&n| n > 0);
+/// The games every pair is scheduled to play, decided or not, when all share one count: the format's,
+/// so it holds whichever round the table shows.
+pub fn games_per_pair(table: &[Vec<Vec<CellGame>>]) -> Option<usize> {
+    let mut counts = table.iter().flatten().map(Vec::len).filter(|&n| n > 0);
     let first = counts.next()?;
     counts.all(|n| n == first).then_some(first)
 }
@@ -399,6 +396,67 @@ pub fn movement(pairings: &[Pairing]) -> BTreeMap<String, i64> {
     }
     let (before, after) = (places(&points(pairings, d - 1)), places(&points(pairings, d)));
     after.into_iter().map(|(p, now)| (p.to_string(), before.get(p).map_or(0, |&b| b as i64 - now as i64))).collect()
+}
+
+/// The rankings /td would have sent after round `through`, by its `CalculateRankings`: a rest counts as a
+/// win but in no fraction, the average margin is over the rounds, and the tiebreak is a quarter of the
+/// mean, over the games played, of 1 + the margin over `max_margin` + the opponent's score fraction
+/// (doubled). Best first; `players` gives the rows and the order of exact ties.
+pub fn rankings(players: &[String], pairings: &[Pairing], through: u32, max_margin: f64) -> Vec<Standing> {
+    let index = |name: &str| players.iter().position(|p| p == name);
+    let mut byes = vec![0; players.len()];
+    // Losses, draws and wins over the games played, rests left out.
+    let mut results = vec![[0u32; 3]; players.len()];
+    let mut discs = vec![0.; players.len()];
+    let mut games = Vec::new();
+    for p in pairings.iter().filter(|p| p.round <= through) {
+        let (b, w) = (index(&p.black), p.white.as_deref().and_then(index));
+        match p.result {
+            Outcome::Bye => b.into_iter().chain(w).for_each(|i| byes[i] += 1),
+            Outcome::Margin { black, .. } => {
+                let (Some(b), Some(w)) = (b, w) else { continue };
+                let side = if black > 0. {
+                    2
+                } else if black < 0. {
+                    0
+                } else {
+                    1
+                };
+                results[b][side] += 1;
+                results[w][2 - side] += 1;
+                discs[b] += black;
+                discs[w] -= black;
+                games.push((b, w, black / max_margin));
+            }
+            Outcome::Playing | Outcome::Unstarted => {}
+        }
+    }
+    let played = |i: usize| results[i].iter().sum::<u32>();
+    let fraction = |i: usize| f64::from(2 * results[i][2] + results[i][1]) / f64::from(played(i));
+    let mut quotient = vec![0.; players.len()];
+    for &(b, w, margin) in &games {
+        quotient[b] += 1. + margin + fraction(w);
+        quotient[w] += 1. - margin + fraction(b);
+    }
+    let mut rows: Vec<Standing> = players
+        .iter()
+        .enumerate()
+        .map(|(i, login)| {
+            let [losses, draws, wins] = results[i];
+            let n = played(i);
+            Standing {
+                points: f64::from(wins + byes[i]) + f64::from(draws) / 2.,
+                wins: wins + byes[i],
+                draws,
+                losses,
+                discs: discs[i] / f64::from(through.max(1)),
+                login: login.clone(),
+                tiebreak: if n > 0 && through > 0 { quotient[i] / f64::from(n) / 4. } else { 0. },
+            }
+        })
+        .collect();
+    rows.sort_by(|a, b| b.points.total_cmp(&a.points).then(b.tiebreak.total_cmp(&a.tiebreak)));
+    rows
 }
 
 /// A block whose head starts `/td: `, with the `|` of its further lines removed.
@@ -748,6 +806,57 @@ mod tests {
     }
 
     #[test]
+    fn rankings_rebuilt_from_the_schedule_match_td_s_own() {
+        let (replies, _) = replay();
+        let mut t = Tourneys::default();
+        for m in replies {
+            t.apply(m, Instant::now());
+        }
+        // As /td prints them: points to 1 place, the average margin to 2, the tiebreak to 4.
+        let printed = |s: &[Standing]| -> Vec<String> {
+            s.iter()
+                .map(|s| {
+                    format!(
+                        "{} {:.1} {}-{}-{} {:.2} {:.4}",
+                        s.login, s.points, s.wins, s.draws, s.losses, s.discs, s.tiebreak
+                    )
+                })
+                .collect()
+        };
+        let mut checked = 0;
+        for (id, standings) in t.standings.iter().filter(|(id, s)| !s.is_empty() && t.finished(id)) {
+            let schedule = &t.schedules[id];
+            let max = crate::othello::playable_squares(&t.info(id).unwrap().game_type).unwrap() as f64;
+            let rebuilt = rankings(&t.players(id), schedule, decided(schedule), max);
+            assert_eq!(printed(&rebuilt), printed(standings), "tournament {id}");
+            checked += 1;
+        }
+        assert!(checked > 0, "the fixture has a finished tournament");
+
+        let three = [
+            board(1, 1, "a", Some("b"), margin(64.)),
+            board(1, 2, "c", None, Outcome::Bye),
+            board(2, 1, "c", Some("a"), margin(0.)),
+            board(2, 2, "b", Some("(bye)"), Outcome::Bye),
+        ];
+        let players = ["a", "b", "c"].map(String::from);
+        let after1 = rankings(&players, &three, 1, 64.);
+        assert_eq!(
+            after1.iter().map(|s| (s.login.as_str(), s.points, s.wins)).collect::<Vec<_>>(),
+            [("a", 1., 1), ("c", 1., 1), ("b", 0., 0)],
+            "a rest is a win; the winner by discs leads the rester, who has no games for a tiebreak"
+        );
+        assert_eq!((after1[0].discs, after1[0].tiebreak), (64., 0.5), "(1 + 1 + 0) / 4");
+        let after2 = rankings(&players, &three, 2, 64.);
+        assert_eq!(
+            after2.iter().map(|s| (s.login.as_str(), s.points, s.tiebreak)).collect::<Vec<_>>(),
+            [("c", 1.5, 0.625), ("a", 1.5, 0.5), ("b", 1., 0.375)],
+            "level on points, c's one draw against a strong a outweighs a's average"
+        );
+        assert!(rankings(&players, &three, 0, 64.).iter().all(|s| s.points == 0. && s.tiebreak == 0.));
+    }
+
+    #[test]
     fn a_rows_progress_counts_down_its_round_and_goes_once_finished() {
         let at = Instant::now();
         let later = at + Duration::from_secs(30);
@@ -913,17 +1022,17 @@ mod tests {
     }
 
     #[test]
-    fn a_count_every_decided_meeting_shares_is_left_out() {
+    fn the_games_every_pair_is_scheduled_count_decided_or_not() {
         use CellGame::*;
         let table = |cells: Vec<Vec<CellGame>>| vec![cells];
-        assert_eq!(shared_decided(&table(vec![vec![Margin(2.), Margin(-1.)], vec![Margin(0.), Margin(4.)]])), Some(2));
+        assert_eq!(games_per_pair(&table(vec![vec![Margin(2.), Margin(-1.)], vec![Margin(0.), Margin(4.)]])), Some(2));
         assert_eq!(
-            shared_decided(&table(vec![vec![Margin(2.), Playing], vec![], vec![Margin(1.)]])),
-            Some(1),
-            "a game still playing and an empty cell add no count"
+            games_per_pair(&table(vec![vec![Margin(2.), Playing], vec![], vec![Unstarted, Unstarted]])),
+            Some(2),
+            "games still to play count, an empty cell does not"
         );
-        assert_eq!(shared_decided(&table(vec![vec![Margin(2.), Margin(-1.)], vec![Margin(0.)]])), None);
-        assert_eq!(shared_decided(&table(vec![vec![Unstarted]])), None);
+        assert_eq!(games_per_pair(&table(vec![vec![Margin(2.), Margin(-1.)], vec![Margin(0.)]])), None);
+        assert_eq!(games_per_pair(&table(vec![vec![]])), None);
     }
 
     #[test]

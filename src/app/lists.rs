@@ -92,6 +92,12 @@ impl Viewer {
             .child(section("ADJOURNED", "", lobby.stored.get(login).map(Vec::as_slice), cx))
     }
 
+    /// Shows `id`'s standings after `round`, or the current ones for `None`.
+    pub(super) fn show_round(&mut self, id: &str, round: Option<u32>, cx: &mut Context<Self>) {
+        self.tourney_round = round.map(|n| (id.to_string(), n));
+        cx.notify();
+    }
+
     pub(super) fn render_tourney(&self, id: &str, lobby: &Lobby, cx: &mut Context<Self>) -> Div {
         let t = &lobby.tourneys;
         let now = Instant::now();
@@ -127,15 +133,40 @@ impl Viewer {
                     .child(div().font_weight(FontWeight::SEMIBOLD).child(t.status(id, now).unwrap_or_default()))
             }
         };
-        let standings =
-            if t.players(id).is_empty() { ui::placeholder(ui::LOADING) } else { standings_table(t, id, schedule, cx) };
+        let as_of = self.tourney_round.as_ref().filter(|(t, _)| t == id).map(|&(_, n)| n);
+        let standings = if t.players(id).is_empty() {
+            ui::placeholder(ui::LOADING)
+        } else {
+            standings_table(t, id, schedule, as_of, cx)
+        };
+        let last_round = schedule.iter().map(|p| p.round).max().unwrap_or(0);
         let rounds = match t.schedules.get(id) {
             Some(rows) if !rows.is_empty() => {
                 div().v_flex().gap_3().children(rows.chunk_by(|a, b| a.round == b.round).map(|round| {
+                    let n = round[0].round;
+                    let tourney = id.to_string();
                     div()
                         .v_flex()
                         .gap_1()
-                        .child(caption().child(format!("Round {}", round[0].round)))
+                        .child(
+                            caption()
+                                .id(("round-caption", n as usize))
+                                .debug_selector(move || format!("round-caption-{n}"))
+                                .w_full()
+                                .cursor_pointer()
+                                .hover(|s| s.text_color(ui::ink()))
+                                .when(as_of == Some(n), |d| d.text_color(ui::accent()))
+                                .child(format!("Round {n}"))
+                                .tooltip(move |window, cx| {
+                                    gpui_kit::component::tooltip::Tooltip::new(format!("Standings after round {n}"))
+                                        .build(window, cx)
+                                })
+                                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                                    // The last round's standings are /td's own.
+                                    let pick = (as_of != Some(n) && n < last_round).then_some(n);
+                                    this.show_round(&tourney, pick, cx);
+                                })),
+                        )
                         // Fixed-width cards wrap into columns, so a big round stays short.
                         .child(
                             div()
@@ -153,10 +184,14 @@ impl Viewer {
             .v_flex()
             .gap_4()
             .max_w(px(ui::PAGE_MAX_W))
+            // The page fills the center so the standings stay put and only the rounds scroll. A field
+            // too big for that shrinks the standings to scroll in their own box.
+            .h_full()
             .px_6()
             .py_4()
             .child(
                 div()
+                    .flex_none()
                     .h_flex()
                     .justify_between()
                     .child(
@@ -180,10 +215,58 @@ impl Viewer {
                             .child(close_sheet(cx)),
                     ),
             )
-            .when(!tile_matches(lobby, id).is_empty(), |d| d.child(live_tiles(lobby, id, now, cx)))
-            .child(about)
-            .child(div().v_flex().gap_2().child(ui::header("STANDINGS")).child(standings))
-            .child(div().v_flex().gap_2().child(ui::header("ROUNDS")).child(rounds))
+            .when(!tile_matches(lobby, id).is_empty(), |d| {
+                d.child(div().flex_none().child(live_tiles(lobby, id, now, cx)))
+            })
+            .child(about.flex_none())
+            .child(
+                div()
+                    .min_h(px(160.))
+                    .v_flex()
+                    .gap_2()
+                    .child(div().h_flex().gap_2().child(ui::header("STANDINGS")).when(last_round > 0, |d| {
+                        d.child(
+                            div()
+                                .id("standings-round")
+                                .debug_selector(|| "standings-round".into())
+                                .track_focus(&self.round_focus)
+                                // Before the center takes the keys back on the way up.
+                                .capture_any_mouse_down(cx.listener(|this, _: &MouseDownEvent, window, cx| {
+                                    window.focus(&this.round_focus, cx)
+                                }))
+                                .on_mouse_down(
+                                    MouseButton::Left,
+                                    cx.listener(|_, _: &MouseDownEvent, _, cx| cx.stop_propagation()),
+                                )
+                                .on_key_down(cx.listener({
+                                    let id = id.to_string();
+                                    move |this, ev: &KeyDownEvent, _, cx| {
+                                        let shown = as_of.unwrap_or(last_round);
+                                        let n = match ev.keystroke.key.as_str() {
+                                            "up" => shown.saturating_sub(1).max(1),
+                                            "down" => (shown + 1).min(last_round),
+                                            _ => return,
+                                        };
+                                        cx.stop_propagation();
+                                        this.show_round(&id, (n < last_round).then_some(n), cx);
+                                    }
+                                }))
+                                .child(round_select(id, as_of, last_round, cx)),
+                        )
+                    }))
+                    .child(div().id("standings").flex_1().min_h_0().child(standings).overflow_y_scrollbar()),
+            )
+            .child(
+                div()
+                    .debug_selector(|| "rounds".into())
+                    .flex_1()
+                    // When the standings fill the window, the rounds keep this much and the page scrolls.
+                    .min_h(px(240.))
+                    .v_flex()
+                    .gap_2()
+                    .child(ui::header("ROUNDS"))
+                    .child(div().id("rounds").flex_1().min_h_0().child(rounds).overflow_y_scrollbar()),
+            )
     }
 
     pub(super) fn render_rail(&self, chat: &Chat, lobby: &Lobby, cx: &mut Context<Self>) -> Stateful<Div> {
@@ -708,17 +791,61 @@ fn tile_board(game: &Game, now: Instant) -> Div {
 /// and name stay put; the numbers and the games scroll sideways beside them. A round robin heads its game
 /// columns with places; a Swiss field meets only a few of its players, so its columns are the rounds.
 /// Before the rankings come the rows follow finger's order and leave the numbers out.
-fn standings_table(t: &td::Tourneys, id: &str, schedule: &[td::Pairing], cx: &mut Context<Viewer>) -> Div {
+/// Picks the standings to show, now or after a round, beside their head.
+/// The last round stands for /td's own standings, so a live round shows its games so far.
+fn round_select(id: &str, as_of: Option<u32>, last: u32, cx: &mut Context<Viewer>) -> impl IntoElement + use<> {
+    let shown = as_of.unwrap_or(last);
+    let (weak, id) = (cx.weak_entity(), id.to_string());
+    Button::new("standings-round")
+        .ghost()
+        .xsmall()
+        .cursor_pointer()
+        .label(format!("Round {shown}"))
+        .dropdown_caret(true)
+        .dropdown_menu(move |mut menu, _, _| {
+            menu = menu.scrollable(true).max_h(px(320.));
+            for n in 1..=last {
+                let (weak, id) = (weak.clone(), id.clone());
+                menu = menu.item(PopupMenuItem::new(format!("Round {n}")).checked(shown == n).on_click(
+                    move |_, _, cx| {
+                        let _ = weak.update(cx, |this, cx| this.show_round(&id, (n < last).then_some(n), cx));
+                    },
+                ));
+            }
+            menu
+        })
+}
+
+/// /td's standings, or with `as_of` the ones it would have sent after that round, the games after it left out.
+fn standings_table(
+    t: &td::Tourneys,
+    id: &str,
+    schedule: &[td::Pairing],
+    as_of: Option<u32>,
+    cx: &mut Context<Viewer>,
+) -> Div {
     const ROW_H: f32 = 28.;
     const HEAD_H: f32 = 22.;
-    let players = t.players(id);
-    let standings = t.standings.get(id).map_or(&[][..], Vec::as_slice);
-    let moved = if t.finished(id) { Default::default() } else { td::movement(schedule) };
-    let medals = !standings.is_empty() && td::decided(schedule) > 0;
+    let past = as_of.map(|n| {
+        let schedule: Vec<td::Pairing> = schedule.iter().filter(|p| p.round <= n).cloned().collect();
+        // finger brings the match type with the rest of the page; until then, the usual 8×8.
+        let max = t.info(id).and_then(|i| crate::othello::playable_squares(&i.game_type)).unwrap_or(64);
+        let standings = td::rankings(&t.players(id), &schedule, n, max as f64);
+        (schedule, standings)
+    });
     let swiss = t.info(id).is_some_and(|i| i.style == td::Style::Swiss);
+    // From the whole schedule, so a past round shows the same.
+    let per_pair = td::games_per_pair(&td::crosstable(&t.players(id), schedule)).filter(|_| !swiss);
+    let (schedule, players, standings) = match &past {
+        Some((schedule, standings)) => {
+            (schedule.as_slice(), standings.iter().map(|s| s.login.clone()).collect(), standings.as_slice())
+        }
+        None => (schedule, t.players(id), t.standings.get(id).map_or(&[][..], Vec::as_slice)),
+    };
+    let moved = if as_of.is_none() && t.finished(id) { Default::default() } else { td::movement(schedule) };
+    let medals = !standings.is_empty() && td::decided(schedule) > 0;
     let rounds = schedule.iter().map(|p| p.round).chain(t.info(id).map(|i| i.rounds)).max().unwrap_or(0);
     let crosstable = td::crosstable(&players, schedule);
-    let shared = td::shared_decided(&crosstable).filter(|_| !swiss);
     let round_table = td::rounds_table(&players, schedule, rounds);
     let games = !schedule.is_empty();
     let cell_w = px(76.);
@@ -798,7 +925,7 @@ fn standings_table(t: &td::Tourneys, id: &str, schedule: &[td::Pairing], cx: &mu
                         .gap_1()
                         .when(r == c, |d| d.bg(ui::column()))
                         .when(!games.is_empty(), |d| d.debug_selector(move || selector.clone()))
-                        .child(meeting_score(games, shared))
+                        .child(meeting_score(games))
                 }))
             })
             .when(games && swiss, |d| {
@@ -826,7 +953,7 @@ fn standings_table(t: &td::Tourneys, id: &str, schedule: &[td::Pairing], cx: &mu
     div()
         .v_flex()
         .gap_1()
-        .when_some(shared.filter(|&n| n > 1), |d, n| {
+        .when_some(per_pair.filter(|&n| n > 1), |d, n| {
             d.child(caption().debug_selector(|| "cross-games".into()).child(format!("{n} games per pair")))
         })
         .child(div().h_flex().items_start().font_family(ui::MONO).text_xs().child(fixed).child(scroll))
@@ -864,9 +991,8 @@ fn round_cell(cell: td::RoundCell) -> Div {
         .child(div().w(px(28.)).text_right().text_color(color).child(score))
 }
 
-/// The row player's points over the decided games of a meeting, `7.5/12`, and `…` while one is played.
-/// The `/12` goes when every meeting shares it.
-fn meeting_score(games: &[td::CellGame], shared: Option<usize>) -> Div {
+/// The row player's points over the decided games of a meeting, and `…` while one is played.
+fn meeting_score(games: &[td::CellGame]) -> Div {
     let margins: Vec<f64> =
         games.iter().filter_map(|g| if let td::CellGame::Margin(m) = g { Some(*m) } else { None }).collect();
     let points: f64 = margins
@@ -885,8 +1011,7 @@ fn meeting_score(games: &[td::CellGame], shared: Option<usize>) -> Div {
     let color = sign_ink(points - even);
     let playing = games.iter().any(|g| matches!(g, td::CellGame::Playing));
     // One decimal throughout, so 1.0, 0.5 and 0.0 are as wide and a column lines up.
-    let score =
-        if shared == Some(margins.len()) { format!("{points:.1}") } else { format!("{points:.1}/{}", margins.len()) };
+    let score = format!("{points:.1}");
     div()
         .h_flex()
         .gap_1()

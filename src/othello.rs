@@ -123,6 +123,17 @@ const DIRS: [(isize, isize); 8] = [(-1, -1), (0, -1), (1, -1), (-1, 0), (1, 0), 
 const OCTAGON_OFF: [(usize, usize); 12] =
     [(0, 0), (0, 1), (1, 0), (9, 9), (9, 8), (8, 9), (0, 9), (0, 8), (1, 9), (9, 0), (8, 0), (9, 1)];
 
+/// The squares in play for a match type such as `8`, `s8`, `k10` or `88`: the largest disc margin.
+pub fn playable_squares(game_type: &str) -> Option<usize> {
+    let digits: String =
+        game_type.chars().skip_while(|c| !c.is_ascii_digit()).take_while(char::is_ascii_digit).collect();
+    match digits.parse().ok()? {
+        88 => Some(100 - OCTAGON_OFF.len()),
+        n @ 4..=14 => Some(n * n),
+        _ => None,
+    }
+}
+
 #[derive(Clone, PartialEq, Debug)]
 pub struct Board {
     /// Squares along each side.

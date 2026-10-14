@@ -176,6 +176,10 @@ pub struct Viewer {
     sheet: Option<Sheet>,
     /// The pages left for another page or a board, newest last, offered again by the Back button.
     back: Vec<Sheet>,
+    /// The tournament whose standings are shown as they stood after a past round, and that round.
+    tourney_round: Option<(String, u32)>,
+    /// The round picker beside the standings, which steps through the rounds with Up and Down.
+    round_focus: FocusHandle,
     focus_layout: Entity<ResizableState>,
     plain_layout: Entity<ResizableState>,
     log_layout: Entity<ResizableState>,
@@ -392,6 +396,8 @@ impl Viewer {
             rating_type: RatingType::Eight,
             sheet: None,
             back: Vec::new(),
+            tourney_round: None,
+            round_focus: cx.focus_handle(),
             focus_layout: cx.new(|_| ResizableState::default()),
             plain_layout: cx.new(|_| ResizableState::default()),
             log_layout: cx.new(|_| ResizableState::default()),
