@@ -2758,8 +2758,7 @@ fn a_round_caption_shows_the_standings_after_that_round(cx: &mut TestAppContext)
     assert!(current(cx), "picking it again goes back");
     let shown = |cx: &mut VisualTestContext| viewer.read_with(cx, |v, _| v.tourney_round.clone());
     click(cx, "standings-round");
-    cx.simulate_keystrokes("down enter");
-    settle(cx);
+    click(cx, "standings-round-item-1");
     assert_eq!(shown(cx), Some(("3".into(), 1)), "the menu beside the standings picks a round too");
     // Then Up and Down step through the rounds, round 3 being /td's own standings.
     for (key, round) in [("up", Some(1)), ("down", Some(2)), ("down", None), ("down", None), ("up", Some(2))] {
@@ -2804,6 +2803,24 @@ fn the_standings_stay_put_while_a_long_schedule_scrolls(cx: &mut TestAppContext)
     let last = cx.debug_bounds("round-caption-30").unwrap();
     assert!(last.bottom() <= center.bottom(), "scrolled to the last round: {last:?}");
     assert_eq!(cx.debug_bounds("standing-0").unwrap(), standing, "the standings did not move");
+    // The round menu holds all 30 in a box that scrolls.
+    let picker = cx.debug_bounds("standings-round").unwrap();
+    cx.simulate_click(picker.center(), Default::default());
+    settle(cx);
+    let first = cx.debug_bounds("standings-round-item-1").unwrap();
+    let position = first.center();
+    cx.simulate_mouse_move(position, None, Default::default());
+    cx.update(|window, cx| {
+        window.dispatch_event(
+            ScrollWheelEvent { position, delta: ScrollDelta::Pixels(point(px(0.), px(-100.))), ..Default::default() }
+                .to_platform_input(),
+            cx,
+        );
+    });
+    settle(cx);
+    assert!(cx.debug_bounds("standings-round-item-1").unwrap().top() < first.top(), "the round menu scrolls");
+    cx.simulate_keystrokes("escape");
+    settle(cx);
     let before_last = cx.debug_bounds("round-caption-29").unwrap();
     cx.simulate_click(before_last.center(), Default::default());
     settle(cx);

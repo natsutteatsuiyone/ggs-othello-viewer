@@ -1,4 +1,5 @@
 use super::*;
+use gpui_kit::component::popover::Popover;
 
 impl Viewer {
     pub(super) fn render_games(&self, login: &str, lobby: &Lobby, cx: &mut Context<Self>) -> Div {
@@ -251,7 +252,7 @@ impl Viewer {
                                         this.show_round(&id, (n < last_round).then_some(n), cx);
                                     }
                                 }))
-                                .child(round_select(id, as_of, last_round, cx)),
+                                .child(round_select(id, as_of, last_round, self.round_menu_open, cx)),
                         )
                     }))
                     .child(div().id("standings").flex_1().min_h_0().child(standings).overflow_y_scrollbar()),
@@ -791,28 +792,81 @@ fn tile_board(game: &Game, now: Instant) -> Div {
 /// and name stay put; the numbers and the games scroll sideways beside them. A round robin heads its game
 /// columns with places; a Swiss field meets only a few of its players, so its columns are the rounds.
 /// Before the rankings come the rows follow finger's order and leave the numbers out.
-/// Picks the standings to show, now or after a round, beside their head.
-/// The last round stands for /td's own standings, so a live round shows its games so far.
-fn round_select(id: &str, as_of: Option<u32>, last: u32, cx: &mut Context<Viewer>) -> impl IntoElement + use<> {
+/// Picks the standings to show after a round, beside their head. The last round stands for /td's
+/// own standings, so a live round shows its games so far.
+// A list of our own, not the library's menu: its scrollbar lies over the rows, so the checked row's
+// highlight ran into it. Here the rows stop short of the scrollbar.
+fn round_select(id: &str, as_of: Option<u32>, last: u32, open: bool, cx: &mut Context<Viewer>) -> Popover {
     let shown = as_of.unwrap_or(last);
     let (weak, id) = (cx.weak_entity(), id.to_string());
-    Button::new("standings-round")
-        .ghost()
-        .xsmall()
-        .cursor_pointer()
-        .label(format!("Round {shown}"))
-        .dropdown_caret(true)
-        .dropdown_menu(move |mut menu, _, _| {
-            menu = menu.scrollable(true).max_h(px(320.));
-            for n in 1..=last {
-                let (weak, id) = (weak.clone(), id.clone());
-                menu = menu.item(PopupMenuItem::new(format!("Round {n}")).checked(shown == n).on_click(
-                    move |_, _, cx| {
-                        let _ = weak.update(cx, |this, cx| this.show_round(&id, (n < last).then_some(n), cx));
-                    },
-                ));
-            }
-            menu
+    let set_open = {
+        let weak = weak.clone();
+        move |open: bool, cx: &mut App| {
+            let _ = weak.update(cx, |this, cx| {
+                this.round_menu_open = open;
+                cx.notify();
+            });
+        }
+    };
+    let toggle = set_open.clone();
+    Popover::new("standings-round-menu")
+        .open(open)
+        .on_open_change(move |open: &bool, _, cx| toggle(*open, cx))
+        .trigger(
+            Button::new("standings-round")
+                .ghost()
+                .xsmall()
+                .cursor_pointer()
+                .label(format!("Round {shown}"))
+                .dropdown_caret(true),
+        )
+        .p_1()
+        .when(open, |p| {
+            p.child(
+                div()
+                    .id("standings-round-list")
+                    // A height, not a cap: the scroller hands a cap on to the rows too, which then never
+                    // overflow it. Rows are 26 px with 2 px between.
+                    .h(px((last as f32 * 28. - 2.).min(320.)))
+                    .child(
+                        div()
+                            .v_flex()
+                            .gap_0p5()
+                            // Room for the scrollbar, which overlays this edge.
+                            .pr(px(12.))
+                            .children((1..=last).map(|n| {
+                                let (weak, id, set_open) = (weak.clone(), id.clone(), set_open.clone());
+                                div()
+                                    .id(("standings-round-item", n as usize))
+                                    .debug_selector(move || format!("standings-round-item-{n}"))
+                                    .h(px(26.))
+                                    .pl_1()
+                                    .pr_3()
+                                    .h_flex()
+                                    .gap_1()
+                                    .rounded(px(ui::RADIUS_TAG))
+                                    .text_sm()
+                                    .cursor_pointer()
+                                    .hover(|s| s.bg(ui::cursor_bg()))
+                                    .when(shown == n, |d| d.bg(ui::cursor_bg()))
+                                    .child(
+                                        div().size(px(16.)).flex_none().when(shown == n, |d| {
+                                            d.child(Icon::new(ui::IconName::Check).size(px(14.)))
+                                        }),
+                                    )
+                                    .child(format!("Round {n}"))
+                                    .on_click(move |_, window, cx| {
+                                        set_open(false, cx);
+                                        let _ = weak.update(cx, |this, cx| {
+                                            // Back to the picker, so Up and Down go on from the pick.
+                                            window.focus(&this.round_focus, cx);
+                                            this.show_round(&id, (n < last).then_some(n), cx)
+                                        });
+                                    })
+                            })),
+                    )
+                    .overflow_y_scrollbar(),
+            )
         })
 }
 

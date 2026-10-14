@@ -180,6 +180,7 @@ pub struct Viewer {
     tourney_round: Option<(String, u32)>,
     /// The round picker beside the standings, which steps through the rounds with Up and Down.
     round_focus: FocusHandle,
+    round_menu_open: bool,
     focus_layout: Entity<ResizableState>,
     plain_layout: Entity<ResizableState>,
     log_layout: Entity<ResizableState>,
@@ -398,6 +399,7 @@ impl Viewer {
             back: Vec::new(),
             tourney_round: None,
             round_focus: cx.focus_handle(),
+            round_menu_open: false,
             focus_layout: cx.new(|_| ResizableState::default()),
             plain_layout: cx.new(|_| ResizableState::default()),
             log_layout: cx.new(|_| ResizableState::default()),
