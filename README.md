@@ -11,7 +11,9 @@ A desktop app for watching Othello games on the [Generic Game Server](https://sk
 - **Top**: the rankings
 - **Tourney**: tournaments run by `/td`, with standings and rounds
 - **Chat**: channels and private conversations
-- **Engine logs**: the search logs the players' engines post to their GGS channels, side by side under the board and divided at each move
+- **Engine logs**: the search logs the players' engines post to their GGS channels, side by side under the board and
+  divided at each move. The logs button turns them on or off, and the choice is kept for the next start. While they
+  are on, the app joins the log channels of the games on screen and leaves them afterwards.
 
 ![Synchro view of both boards of a live synchro match, with the engines' search logs](docs/images/synchro.png)
 
@@ -19,11 +21,18 @@ A desktop app for watching Othello games on the [Generic Game Server](https://sk
 
 ## Run
 
-Requires Rust 1.99 or later. On Linux, first install the packages listed in
+Requires Rust 1.99.1 or later. On Linux, first install the packages listed in
 [GPUI Kit Installation](https://gpui-kit.com/docs/installation).
 
 ```sh
 cargo run --release
+```
+
+To try the app without a server, run a scripted session. To skip the login form, give a server and a login:
+
+```sh
+cargo run --release -- --demo
+cargo run --release -- --connect HOST:PORT --login NAME [--password PW]
 ```
 
 ## Data
