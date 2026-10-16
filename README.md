@@ -2,7 +2,7 @@
 
 A desktop app for watching Othello games on the [Generic Game Server](https://skatgame.net/mburo/ggs/) (GGS).
 
-![Focus view of a live game with the match list and kibitz](docs/images/focus.png)
+![Focus view of a live synchro game, with both engines' search logs under the board](docs/images/focus.png)
 
 ## Features
 
@@ -11,8 +11,9 @@ A desktop app for watching Othello games on the [Generic Game Server](https://sk
 - **Top**: the rankings
 - **Tourney**: tournaments run by `/td`, with standings and rounds
 - **Chat**: channels and private conversations
+- **Engine logs**: the search logs the players' engines post to their GGS channels, side by side under the board and divided at each move
 
-![Synchro view of both boards of a live synchro match](docs/images/synchro.png)
+![Synchro view of both boards of a live synchro match, with the engines' search logs](docs/images/synchro.png)
 
 ![A finished round robin tournament with its standings and rounds](docs/images/tourney.png)
 
