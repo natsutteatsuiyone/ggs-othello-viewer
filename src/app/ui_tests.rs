@@ -3825,3 +3825,43 @@ fn a_finished_tournament_reopens_from_its_loaded_page(cx: &mut TestAppContext) {
         })
     });
 }
+
+#[gpui_kit::test]
+fn engine_logs_join_both_players_channels_and_reports_stay_out_of_the_chat(cx: &mut TestAppContext) {
+    let (viewer, cx) = fixture(cx);
+    let sent = |v: &Viewer, cmd: &str| v.log.iter().flat_map(|b| &b.lines).any(|line| line == cmd);
+    let button = cx.debug_bounds("search-follow").expect("the focused game offers its engine logs");
+    cx.simulate_click(button.center(), Default::default());
+    settle(cx);
+    cx.update(|_, cx| {
+        viewer.update(cx, |v, cx| {
+            assert!(sent(v, "> chann + .alice .bob"));
+            v.on_message(
+                vec![
+                    ".bob bob: ------------".into(),
+                    "bob plays C5 in game .12 using 4 threads ;".into(),
+                    "score == 1 at 20 ; PV: C5 f6 ;".into(),
+                ],
+                cx,
+            );
+            let c5 = crate::othello::Move::parse("c5").unwrap();
+            let report = v.session.lobby.games[".12"].search(c5).expect("the report is kept with its game");
+            assert_eq!(report.pv.as_deref(), Some("C5 f6"));
+            let Screen::Connected(conn) = &v.session.screen else { unreachable!() };
+            assert!(
+                conn.chat.conversations.iter().flat_map(|c| &c.lines).all(|said| !said
+                    .line
+                    .lines
+                    .iter()
+                    .any(|l| l.contains("plays"))),
+                "a report is not chat"
+            );
+        })
+    });
+    settle(cx);
+    assert!(cx.debug_bounds("search").is_some_and(|s| s.size.height > button.size.height * 3.), "the report is shown");
+    let button = cx.debug_bounds("search-follow").unwrap();
+    cx.simulate_click(button.center(), Default::default());
+    settle(cx);
+    cx.update(|_, cx| assert!(sent(viewer.read(cx), "> chann - .alice .bob")));
+}

@@ -1267,13 +1267,15 @@ impl Viewer {
         let k = at.unwrap_or(game.moves().len());
         let can_kibitz = self.session.lobby.can_kibitz(game);
         let observers: Vec<&str> = game.observers.iter().map(String::as_str).collect();
-        let moves = div().v_flex().gap_2().size_full().min_h_0().pb_2().child(ui::header("MOVES")).child(render_moves(
-            game,
-            k,
-            &self.board.moves_scroll,
-            cx,
-            Viewer::navigate,
-        ));
+        let moves = div()
+            .v_flex()
+            .gap_2()
+            .size_full()
+            .min_h_0()
+            .pb_2()
+            .child(ui::header("MOVES"))
+            .child(render_moves(game, k, &self.board.moves_scroll, cx, Viewer::navigate))
+            .child(self.render_search(game, k, cx));
         let kibitz = div()
             .v_flex()
             .gap_2()
@@ -1356,6 +1358,75 @@ impl Viewer {
                     ),
             ),
         )
+    }
+
+    /// The players' engine logs for the move that led to position `k`, once both log channels are joined.
+    fn render_search(&self, game: &Game, k: usize, cx: &mut Context<Viewer>) -> Div {
+        let mut channels = vec![search::channel(&game.black.name), search::channel(&game.white.name)];
+        channels.dedup();
+        let joined = |c: &String| match &self.session.screen {
+            Screen::Connected(conn) => conn.chat.conversations.iter().any(|v| v.key == ChatKey::Channel(c.clone())),
+            _ => false,
+        };
+        let following = channels.iter().all(joined);
+        let command = match following {
+            true => format!("chann - {}", channels.join(" ")),
+            false => {
+                format!("chann + {}", channels.iter().filter(|c| !joined(c)).cloned().collect::<Vec<_>>().join(" "))
+            }
+        };
+        let report = k.checked_sub(1).and_then(|i| {
+            let m = &game.moves()[i];
+            Some((m, game.search(m.token.mv)?))
+        });
+        div()
+            .debug_selector(|| "search".into())
+            .flex_none()
+            .v_flex()
+            .gap_1()
+            .pt_2()
+            .child(
+                div().h_flex().justify_between().child(ui::header("SEARCH")).child(
+                    ui::button("search-follow", "Engine logs", following, true)
+                        .debug_selector(|| "search-follow".into())
+                        .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                            this.send(command.clone());
+                            cx.notify();
+                        })),
+                ),
+            )
+            .when(following, |d| match report {
+                None => d.child(ui::placeholder("No search log for this move.")),
+                Some((m, log)) => {
+                    let mover = match m.color {
+                        Color::Black => &game.black.name,
+                        Color::White => &game.white.name,
+                    };
+                    let joined = |parts: &[Option<String>], sep: &str| {
+                        let parts: Vec<&str> = parts.iter().flatten().map(String::as_str).collect();
+                        (!parts.is_empty()).then(|| parts.join(sep))
+                    };
+                    let line = |text: String| div().min_w_0().child(text);
+                    d.child(
+                        div()
+                            .v_flex()
+                            .gap_0p5()
+                            .font_family(ui::MONO)
+                            .text_xs()
+                            .text_color(ui::ink())
+                            .child(line(format!("{mover} · {}", log.mv)))
+                            .children(
+                                joined(&[log.depth.clone(), log.score.as_ref().map(|s| format!("score {s}"))], "  ")
+                                    .map(line),
+                            )
+                            .children(log.pv.as_ref().map(|pv| line(format!("PV  {pv}"))))
+                            .children(
+                                joined(&[log.nodes.clone(), log.time.clone(), log.speed.clone()], " · ").map(line),
+                            )
+                            .children(log.rest.iter().map(|r| line(r.clone()).text_color(ui::muted()))),
+                    )
+                }
+            })
     }
 }
 
