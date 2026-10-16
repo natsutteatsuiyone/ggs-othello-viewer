@@ -734,10 +734,8 @@ impl Viewer {
         if let Some(game) = l.focused() {
             self.board.views.navigate(game, nav);
         }
-        if let Some(game) = l.focused() {
-            let at = self.board.views.get(game).cursor;
-            self.board.moves_scroll.scroll_to_item(record_row(game, at));
-            scroll_search_logs(&self.board.search_scroll, &l.searches, game, at, self.board.views.get(game).flipped);
+        if let Some(r) = l.focused().map(|g| record_row(g, self.board.views.get(g).cursor)) {
+            self.board.moves_scroll.scroll_to_item(r);
         }
         cx.notify();
     }
@@ -1003,7 +1001,7 @@ impl Viewer {
                                         .when(self.sheet.is_none() && lobby.view == ViewMode::Synchro, |d| {
                                             let halves = lobby.synchro_halves();
                                             let Some(game) = halves.iter().flatten().next() else { return d };
-                                            let (following, follow) = self.engine_follow(game);
+                                            let Some((following, follow)) = self.engine_follow(game) else { return d };
                                             d.child(div().flex_1()).child(
                                                 ui::icon_button(
                                                     "synchro-search-follow",
@@ -1095,7 +1093,11 @@ impl Viewer {
         let komi = game.komi.map(|k| format!(" · komi {}", ui::signed(k, Some(2)))).unwrap_or_default();
         let gid = game.id.clone();
         let copy_id = game.id.clone();
-        let (following, follow) = self.engine_follow(game);
+        let follow = self.engine_follow(game);
+        let following = follow.as_ref().is_some_and(|(on, _)| *on);
+        if !following {
+            self.board.search_scroll.forget();
+        }
         div()
             .v_flex()
             .items_center()
@@ -1146,14 +1148,14 @@ impl Viewer {
                                 ui::icon_button("flip", ui::IconName::FlipVertical2, "Flip", view.flipped, true)
                                     .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.flip(cx))),
                             )
-                            .child(
-                                ui::icon_button("search-follow", ui::IconName::Cpu, "Engine logs", following, true)
+                            .children(follow.map(|(on, command)| {
+                                ui::icon_button("search-follow", ui::IconName::Cpu, "Engine logs", on, true)
                                     .debug_selector(|| "search-follow".into())
                                     .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                                        this.send(follow.clone());
+                                        this.send(command.clone());
                                         cx.notify();
-                                    })),
-                            )
+                                    }))
+                            }))
                             .child(ui::icon_button("unwatch", ui::IconName::X, stop, false, true).on_click(
                                 cx.listener(move |this, _: &ClickEvent, _, cx| {
                                     this.with_lobby(cx, |l| l.unwatch(&gid))
@@ -1404,20 +1406,25 @@ impl Viewer {
         &self,
         searches: &crate::search::Searches,
         games: &[Option<&Game>],
-        scroll: &ScrollHandle,
+        scroll: &LogScroll,
         room: Size<f32>,
     ) -> (Size<f32>, Option<Div>) {
-        let Some(game) = games.iter().flatten().next() else { return (room, None) };
-        if !self.engine_follow(game).0 {
+        let game = games.iter().flatten().next();
+        let Some(game) = game.filter(|g| self.engine_follow(g).is_some_and(|(on, _)| on)) else {
+            scroll.forget();
             return (room, None);
-        }
+        };
         let (height, taken) = engine_logs_h(room.height);
         let logs = div().px_4().pb_4().child(engine_logs(searches, scroll, game, None, false, room.width, height));
         (size(room.width, room.height - taken), Some(logs))
     }
 
-    /// Whether both players' log channels are joined, and the `chann` command that toggles them.
-    fn engine_follow(&self, game: &Game) -> (bool, String) {
+    /// Whether both players' log channels are joined, and the `chann` command that toggles them; `None` for an
+    /// archived game, which no log is about.
+    fn engine_follow(&self, game: &Game) -> Option<(bool, String)> {
+        if game.source == GameSource::Archive {
+            return None;
+        }
         let mut channels = vec![search::channel(&game.black.name), search::channel(&game.white.name)];
         channels.dedup();
         let joined = |c: &String| match &self.session.screen {
@@ -1431,7 +1438,7 @@ impl Viewer {
                 format!("chann + {}", channels.iter().filter(|c| !joined(c)).cloned().collect::<Vec<_>>().join(" "))
             }
         };
-        (following, command)
+        Some((following, command))
     }
 }
 

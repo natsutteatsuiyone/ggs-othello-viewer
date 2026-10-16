@@ -35,20 +35,24 @@ pub struct Searches {
 
 /// A row of two players' logs side by side.
 #[derive(Clone, PartialEq, Debug)]
-pub enum Row<'a> {
+pub enum Row {
     /// A move the server announced `players[side]` played.
-    Move { side: usize, game: &'a str, ply: usize, mv: Move },
+    Move { side: usize, game: String, ply: usize, mv: Move },
     /// What each player sent between two moves.
-    Lines([Vec<&'a str>; 2]),
+    Lines([Vec<String>; 2]),
 }
 
 /// Where the `ply`th move of `game` falls among `rows`.
 pub fn row_of(rows: &[Row], game: &str, ply: usize) -> Option<usize> {
-    rows.iter().position(|r| matches!(r, Row::Move { game: g, ply: p, .. } if *g == game && *p == ply))
+    // A match number comes back for a later game; the shown game is the later one.
+    rows.iter().rposition(|r| matches!(r, Row::Move { game: g, ply: p, .. } if *g == game && *p == ply))
 }
 
 /// An engine logs every move of every game it plays; older entries are dropped past this many.
 const KEEP: usize = 4096;
+/// Lines a row holds per player before the next row continues them, so a long stretch between two moves
+/// is drawn a row at a time, as it scrolls into view.
+const ROW_LINES: usize = 32;
 
 impl Searches {
     pub fn add_line(&mut self, engine: &str, line: &str) {
@@ -76,7 +80,7 @@ impl Searches {
 
     /// Two players' logs in the order they came: each announced move is a row across both, and what the
     /// players sent between two moves shares the row between them.
-    pub fn rows<'a>(&'a self, players: [&str; 2]) -> Vec<Row<'a>> {
+    pub fn rows(&self, players: [&str; 2]) -> Vec<Row> {
         let mut merged: Vec<(u64, usize, &Entry)> = Vec::new();
         for (side, login) in players.iter().enumerate() {
             if side == 1 && players[0] == players[1] {
@@ -88,13 +92,13 @@ impl Searches {
         let mut rows = Vec::new();
         for (_, side, entry) in merged {
             match entry {
-                Entry::Move { game, ply, mv } => rows.push(Row::Move { side, game, ply: *ply, mv: *mv }),
+                Entry::Move { game, ply, mv } => rows.push(Row::Move { side, game: game.clone(), ply: *ply, mv: *mv }),
                 Entry::Line(text) => {
-                    if !matches!(rows.last(), Some(Row::Lines(_))) {
+                    if !matches!(rows.last(), Some(Row::Lines(c)) if c[side].len() < ROW_LINES) {
                         rows.push(Row::Lines([Vec::new(), Vec::new()]));
                     }
                     if let Some(Row::Lines(columns)) = rows.last_mut() {
-                        columns[side].push(text.as_str());
+                        columns[side].push(text.clone());
                     }
                 }
             }
@@ -155,17 +159,25 @@ mod tests {
         s.add_line("b", "b thinks");
         s.add_line("x", "someone else");
         let rows = s.rows(["a", "b"]);
+        let lines = |a: &[&str], b: &[&str]| Row::Lines([a, b].map(|c| c.iter().map(|l| l.to_string()).collect()));
         assert_eq!(
             rows,
             [
-                Row::Lines([vec!["a thinks", "a decides"], vec!["b waits"]]),
-                Row::Move { side: 0, game: ".3.0", ply: 17, mv: mv("g5") },
-                Row::Move { side: 1, game: ".3.1", ply: 17, mv: mv("c2") },
-                Row::Lines([vec![], vec!["b thinks"]]),
+                lines(&["a thinks", "a decides"], &["b waits"]),
+                Row::Move { side: 0, game: ".3.0".into(), ply: 17, mv: mv("g5") },
+                Row::Move { side: 1, game: ".3.1".into(), ply: 17, mv: mv("c2") },
+                lines(&[], &["b thinks"]),
             ]
         );
         assert_eq!(row_of(&rows, ".3.1", 17), Some(2));
         assert_eq!(row_of(&rows, ".3.1", 18), None);
         assert_eq!(s.rows(["a", "a"]).len(), 2, "one login playing itself is listed once");
+        for _ in 0..=ROW_LINES {
+            s.add_line("a", "a again");
+        }
+        let rows = s.rows(["a", "b"]);
+        let [.., Row::Lines(full), Row::Lines(next)] = rows.as_slice() else { panic!("{rows:?}") };
+        assert_eq!((full[0].len(), &full[1][..]), (ROW_LINES, &["b thinks".to_string()][..]));
+        assert_eq!((next[0].len(), next[1].len()), (1, 0), "a full row continues in the next");
     }
 }

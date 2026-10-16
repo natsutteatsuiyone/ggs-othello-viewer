@@ -1,5 +1,7 @@
 use super::*;
 use crate::search::{Row, Searches, row_of};
+use std::cell::RefCell;
+use std::rc::Rc;
 
 #[derive(Default)]
 pub(super) struct BoardPane {
@@ -8,7 +10,7 @@ pub(super) struct BoardPane {
     pub synchro_fit: [Fit; 2],
     pub moves_scroll: ScrollHandle,
     /// The engine logs under the board.
-    pub search_scroll: ScrollHandle,
+    pub search_scroll: LogScroll,
 }
 
 /// The Focus column and its board as last laid out. Everything in the column but the board keeps
@@ -363,11 +365,12 @@ pub(super) fn player_panel(game: &Game, at: At, flipped: bool, now: Instant, wid
         .child(cell(right))
 }
 
-/// The logs' scrolling height in a column `column_h` tall, and all the height they take: their name row,
-/// padding and the gap above them. They take a share of the column, and the boards the rest.
+/// The logs' scrolling height in a column `column_h` tall, and all the height they take under synchro
+/// boards: their padding (24), name row (20) and its gap (8), and the 16 below them. They take a share of
+/// the column, and the boards the rest.
 pub(super) fn engine_logs_h(column_h: f32) -> (f32, f32) {
     let h = (column_h * 0.3).clamp(140., 420.);
-    (h, h + 64.)
+    (h, h + 68.)
 }
 
 /// The players as the logs list them, left first: as the player panels show them.
@@ -376,16 +379,70 @@ fn log_players(game: &Game, flipped: bool) -> [&str; 2] {
     if flipped { [w, b] } else { [b, w] }
 }
 
-/// Scrolls the logs to what position `at` shows: live, the newest rows; browsing, the server's announcement
-/// of the move that led to `at`.
-pub(super) fn scroll_search_logs(scroll: &ScrollHandle, searches: &Searches, game: &Game, at: At, flipped: bool) {
-    match at {
-        None => scroll.scroll_to_bottom(),
-        Some(k) => {
-            if let Some(i) = row_of(&searches.rows(log_players(game, flipped)), &game.id, k) {
-                scroll.scroll_to_item(i);
+/// The engine logs' list, the rows it holds, and what it showed when last drawn. Only the rows in view are
+/// drawn, so a long tournament's logs cost no more than a short one's.
+pub(super) struct LogScroll {
+    pub list: ListState,
+    rows: RefCell<Rc<Vec<Row>>>,
+    /// The players and `Searches::added` the rows were built for.
+    built: RefCell<Option<([String; 2], u64)>>,
+    shown: std::cell::Cell<Option<(String, At, bool)>>,
+}
+
+impl Default for LogScroll {
+    fn default() -> Self {
+        Self {
+            list: ListState::new(0, ListAlignment::Top, px(200.)),
+            rows: Default::default(),
+            built: Default::default(),
+            shown: Default::default(),
+        }
+    }
+}
+
+impl LogScroll {
+    /// The players' rows, built again only when a log or move arrived or the players changed. The list keeps
+    /// the rows that did not change, so it keeps their sizes and the scroll.
+    fn rows(&self, searches: &Searches, players: [&str; 2]) -> Rc<Vec<Row>> {
+        let key = Some((players.map(str::to_string), searches.added()));
+        let mut built = self.built.borrow_mut();
+        let mut held = self.rows.borrow_mut();
+        if *built != key {
+            let rows = searches.rows(players);
+            if built.as_ref().map(|(p, _)| p) == key.as_ref().map(|(p, _)| p) {
+                let kept = held.iter().zip(&rows).take_while(|(a, b)| a == b).count();
+                self.list.splice(kept..held.len(), rows.len() - kept);
+            } else {
+                self.list.reset(rows.len());
+            }
+            *built = key;
+            *held = Rc::new(rows);
+        }
+        held.clone()
+    }
+
+    /// Moves the scroll when another board, position or flip is shown, or the logs appear: to the rule of the
+    /// move that led to `at`, or live to the newest rows, which new rows then keep in view until the reader
+    /// scrolls up. An ended game goes to its last move, since the players' later games follow it.
+    fn sync(&self, rows: &[Row], game: &Game, at: At, flipped: bool) {
+        let shown = Some((game.id.clone(), at, flipped));
+        if self.shown.replace(shown.clone()) == shown {
+            return;
+        }
+        match at.or((game.phase != Phase::Live).then(|| game.moves().len())) {
+            None => self.list.set_follow_mode(FollowMode::Tail),
+            Some(k) => {
+                self.list.set_follow_mode(FollowMode::Normal);
+                if let Some(i) = row_of(rows, &game.id, k) {
+                    self.list.scroll_to_reveal_item(i);
+                }
             }
         }
+    }
+
+    /// The logs are not drawn; they move to their place when they next are.
+    pub(super) fn forget(&self) {
+        self.shown.set(None);
     }
 }
 
@@ -403,7 +460,7 @@ const LOG_SCROLLBAR: f32 = 12.;
 /// line arriving never resizes the board.
 pub(super) fn engine_logs(
     searches: &Searches,
-    scroll: &ScrollHandle,
+    scroll: &LogScroll,
     game: &Game,
     at: At,
     flipped: bool,
@@ -411,37 +468,14 @@ pub(super) fn engine_logs(
     height: f32,
 ) -> Div {
     let players = log_players(game, flipped);
-    let rows = searches.rows(players);
+    let rows = scroll.rows(searches, players);
+    scroll.sync(&rows, game, at, flipped);
     let anchor = at.and_then(|k| row_of(&rows, &game.id, k));
+    let names = players.map(str::to_string);
     let column = || div().flex_1().min_w_0().v_flex();
-    let rows = rows.into_iter().enumerate().map(|(i, row)| match row {
-        Row::Lines(columns) => {
-            div().flex_none().py_1().h_flex().items_start().gap(px(LOG_GUTTER)).children(columns.map(|lines| {
-                column().gap_0p5().children(lines.into_iter().map(|l| div().whitespace_normal().child(l.to_string())))
-            }))
-        }
-        Row::Move { side, game: id, ply, mv } => {
-            let selector = format!("search-move-{}-{id}-{ply}", players[side]);
-            let ink = if anchor == Some(i) { ui::accent() } else { ui::muted() };
-            let label = || div().flex_none().px_2().child(format!("{id} · {ply} {mv}"));
-            let rule = || div().flex_1().h(px(1.)).bg(if anchor == Some(i) { ui::accent() } else { ui::line() });
-            // The label sits in the mover's column; the rule runs across both.
-            div()
-                .debug_selector(move || selector.clone())
-                .flex_none()
-                .h(px(20.))
-                .my_1()
-                .h_flex()
-                .text_color(ink)
-                .child(rule())
-                .when(side == 0, |d| d.child(label()))
-                .child(rule())
-                .child(rule())
-                .when(side == 1, |d| d.child(label()))
-                .child(rule())
-        }
-    });
     let name = |n: &str| column().h(px(20.)).truncate().font_weight(FontWeight::SEMIBOLD).child(n.to_string());
+    let list =
+        list(scroll.list.clone(), move |i, _, _| log_row(&rows[i], &names, anchor == Some(i)).into_any_element());
     div()
         .debug_selector(|| "search".into())
         .w(px(width))
@@ -461,22 +495,50 @@ pub(super) fn engine_logs(
         // The scrollbar overlays a still frame, as the center column's does.
         .child(
             div()
+                .debug_selector(|| "search-body".into())
                 .relative()
                 .h(px(height))
-                .child(
-                    div()
-                        .id("search-body")
-                        .track_scroll(scroll)
-                        .size_full()
-                        .overflow_y_scroll()
-                        .v_flex()
-                        .pr(px(LOG_SCROLLBAR))
-                        .font_family(ui::MONO)
-                        .text_xs()
-                        .children(rows),
-                )
-                .vertical_scrollbar(scroll),
+                .font_family(ui::MONO)
+                .text_xs()
+                .child(list.size_full().pr(px(LOG_SCROLLBAR)))
+                .vertical_scrollbar(&scroll.list),
         )
+}
+
+/// One row of the logs: each player's lines side by side, or a move's rule across both columns with its
+/// label in the mover's.
+fn log_row(row: &Row, players: &[String; 2], anchored: bool) -> Div {
+    // A list item is as wide as its content unless told otherwise.
+    let row_div = || div().w_full();
+    match row {
+        Row::Lines(columns) => {
+            row_div().py_1().h_flex().items_start().gap(px(LOG_GUTTER)).children(columns.iter().map(|lines| {
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .v_flex()
+                    .gap_0p5()
+                    .children(lines.iter().map(|l| div().whitespace_normal().child(l.clone())))
+            }))
+        }
+        Row::Move { side, game, ply, mv } => {
+            let selector = format!("search-move-{}-{game}-{ply}", players[*side]);
+            let label = || div().flex_none().px_2().child(format!("{game} · {ply} {mv}"));
+            let rule = || div().flex_1().h(px(1.)).bg(if anchored { ui::accent() } else { ui::line() });
+            row_div()
+                .debug_selector(move || selector.clone())
+                .h(px(20.))
+                .my_1()
+                .h_flex()
+                .text_color(if anchored { ui::accent() } else { ui::muted() })
+                .child(rule())
+                .when(*side == 0, |d| d.child(label()))
+                .child(rule())
+                .child(rule())
+                .when(*side == 1, |d| d.child(label()))
+                .child(rule())
+        }
+    }
 }
 
 pub(super) fn under_board<T: 'static>(

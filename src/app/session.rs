@@ -135,14 +135,6 @@ impl Viewer {
         cx.notify();
     }
 
-    /// Live, the engine log boxes stay on their newest lines, as the kibitz does.
-    fn follow_search_logs(&self) {
-        let live = self.session.lobby.focused().is_some_and(|g| self.board.views.get(g).cursor.is_none());
-        if live {
-            self.board.search_scroll.scroll_to_bottom();
-        }
-    }
-
     pub(super) fn send(&mut self, command: impl Into<AppCommand>) -> bool {
         let Some((conn, lobby)) = self.session.connected_mut() else { return false };
         let log = &mut self.log;
@@ -346,7 +338,6 @@ impl Viewer {
                         }
                     }
                 }
-                self.follow_search_logs();
                 // Inherited tracking can subscribe without a UI action. Use the same fixed grace
                 // as a main-board switch; another join must not postpone cleanup indefinitely.
                 if joined.is_some() {
@@ -370,7 +361,6 @@ impl Viewer {
                             lobby.searches.add_line(&line.from, text);
                         }
                     }
-                    self.follow_search_logs();
                 } else if let Screen::Connected(conn) = &mut self.session.screen {
                     self.attention |= conn.chat.add(key, line, SystemTime::now());
                     if self.rail == Rail::Chat {

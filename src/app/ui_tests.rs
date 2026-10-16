@@ -3900,12 +3900,12 @@ fn the_servers_move_announcements_divide_a_players_log_on_both_synchro_boards(cx
         let rows = lobby.searches.rows(players);
         let side = usize::from(player == "bob");
         let mut after = [vec![], vec![]];
-        after[side].push("after");
+        after[side].push("after".to_string());
         assert_eq!(
             rows,
             [
-                Row::Lines([vec!["alice thinks"], vec!["bob waits"]]),
-                Row::Move { side, game: ".20.1", ply, mv: crate::othello::Move::parse("e6").unwrap() },
+                Row::Lines([vec!["alice thinks".to_string()], vec!["bob waits".to_string()]]),
+                Row::Move { side, game: ".20.1".into(), ply, mv: crate::othello::Move::parse("e6").unwrap() },
                 Row::Lines(after),
             ],
             "what both sent between the same moves shares a row"
@@ -3950,4 +3950,121 @@ fn the_synchro_view_shows_the_engine_logs_across_both_boards(cx: &mut TestAppCon
     assert!(logs.size.width > left.size.width, "the boxes span the boards' row");
     let center = cx.debug_bounds("center").unwrap();
     assert!(logs.bottom() <= center.bottom(), "the boards make room for them: {logs:?} {center:?}");
+}
+
+fn follow_engine_logs(selector: &'static str, cx: &mut VisualTestContext) {
+    let button = cx.debug_bounds(selector).expect("the view offers the engine logs");
+    cx.simulate_click(button.center(), Default::default());
+    settle(cx);
+}
+
+/// Plays a legal move on `id` as the server announces one; the mover and the move's number.
+fn announce_a_move(viewer: &Entity<Viewer>, id: &str, cx: &mut VisualTestContext) -> (String, usize) {
+    let played = cx.update(|_, cx| {
+        viewer.update(cx, |v, cx| {
+            let Some((_, lobby)) = v.session.connected_mut() else { unreachable!() };
+            let board = lobby.games[id].board(None);
+            let n = board.size();
+            let sq = (0..n * n)
+                .map(|i| crate::othello::Square { x: i % n, y: i / n })
+                .find(|sq| board.is_legal(*sq))
+                .expect("a legal move");
+            let mover = if board.to_move() == Color::Black { &lobby.games[id].black } else { &lobby.games[id].white };
+            let mover = mover.name.clone();
+            let token = crate::othello::MoveToken::parse(&sq.to_string()).unwrap();
+            lobby.apply(OsMsg::Update { id: id.into(), token }, Instant::now());
+            cx.notify();
+            (mover, lobby.games[id].moves().len())
+        })
+    });
+    settle(cx);
+    played
+}
+
+fn send_logs(viewer: &Entity<Viewer>, from: &str, lines: usize, cx: &mut VisualTestContext) {
+    cx.update(|_, cx| {
+        viewer.update(cx, |v, cx| {
+            for i in 0..lines {
+                v.on_message(vec![format!(".{from} {from}: line {i}")], cx);
+            }
+        })
+    });
+    settle(cx);
+}
+
+fn logs_at_bottom(viewer: &Entity<Viewer>, cx: &mut VisualTestContext) -> bool {
+    cx.update(|_, cx| {
+        let list = &viewer.read(cx).board.search_scroll.list;
+        // Rows above the view may not be measured yet, which leaves the end unknown but not passed.
+        list.is_following_tail() && list.is_scrolled_to_end() != Some(false)
+    })
+}
+
+#[gpui_kit::test]
+fn the_logs_scroll_to_the_shown_move_and_follow_live_only_from_the_bottom(cx: &mut TestAppContext) {
+    let (viewer, cx) = fixture(cx);
+    follow_engine_logs("search-follow", cx);
+    send_logs(&viewer, "alice", 40, cx);
+    let (mover, ply) = announce_a_move(&viewer, ".12", cx);
+    send_logs(&viewer, "bob", 40, cx);
+    announce_a_move(&viewer, ".12", cx);
+    send_logs(&viewer, "alice", 40, cx);
+    assert!(logs_at_bottom(&viewer, cx), "live shows the newest rows");
+
+    cx.update(|_, cx| viewer.update(cx, |v, cx| v.navigate(crate::game::Nav::Prev, cx)));
+    settle(cx);
+    let body = cx.debug_bounds("search-body").unwrap();
+    let rule = cx.debug_bounds(format!("search-move-{mover}-.12-{ply}").leak()).unwrap();
+    assert!(
+        body.top() <= rule.top() && rule.bottom() <= body.bottom(),
+        "browsing shows the move's rule: {rule:?} in {body:?}"
+    );
+    assert!(rule.size.width >= body.size.width - px(20.), "a rule runs across both columns: {rule:?} in {body:?}");
+    send_logs(&viewer, "bob", 5, cx);
+    let still = cx.debug_bounds(format!("search-move-{mover}-.12-{ply}").leak()).unwrap();
+    assert_eq!(still.top(), rule.top(), "a line arriving while browsing leaves the scroll alone");
+
+    cx.update(|_, cx| viewer.update(cx, |v, cx| v.navigate(crate::game::Nav::Live, cx)));
+    settle(cx);
+    assert!(logs_at_bottom(&viewer, cx), "back to live, back to the newest rows");
+    let top = gpui_kit::ListOffset { item_ix: 0, offset_in_item: px(0.) };
+    cx.update(|_, cx| viewer.read(cx).board.search_scroll.list.scroll_to(top));
+    settle(cx);
+    send_logs(&viewer, "alice", 3, cx);
+    let top = cx.update(|_, cx| viewer.read(cx).board.search_scroll.list.logical_scroll_top().item_ix);
+    assert_eq!(top, 0, "a reader who scrolled up stays where they are");
+    cx.update(|_, cx| viewer.read(cx).board.search_scroll.list.scroll_to_end());
+    settle(cx);
+    send_logs(&viewer, "alice", 3, cx);
+    assert!(logs_at_bottom(&viewer, cx), "a reader at the bottom follows new rows");
+}
+
+#[gpui_kit::test]
+fn the_synchro_view_follows_live_whatever_the_focus_view_was_browsing(cx: &mut TestAppContext) {
+    let (viewer, cx) = fixture(cx);
+    add_synchro_pair(&viewer, cx);
+    follow_engine_logs("search-follow", cx);
+    cx.update(|_, cx| viewer.update(cx, |v, cx| v.navigate(crate::game::Nav::First, cx)));
+    settle(cx);
+    open_synchro(&viewer, cx);
+    send_logs(&viewer, "alice", 60, cx);
+    assert!(logs_at_bottom(&viewer, cx), "synchro boards are live, so their logs are");
+}
+
+#[gpui_kit::test]
+fn an_archived_game_offers_no_engine_logs(cx: &mut TestAppContext) {
+    let (viewer, cx) = fixture(cx);
+    follow_engine_logs("search-follow", cx);
+    cx.update(|_, cx| {
+        viewer.update(cx, |v, cx| {
+            v.look(".73".into(), cx);
+            v.on_message(vec!["/os: look".into(), format!("1 {SPEC_JOIN}")], cx);
+            assert_eq!(v.session.lobby.focused().unwrap().id, "archive .73");
+            cx.notify();
+        })
+    });
+    settle(cx);
+    assert!(cx.debug_bounds("focus-board").is_some());
+    assert!(cx.debug_bounds("search-follow").is_none(), "no log is about an archived game");
+    assert!(cx.debug_bounds("search").is_none());
 }
