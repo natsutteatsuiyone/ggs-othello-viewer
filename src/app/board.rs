@@ -521,10 +521,15 @@ fn log_row(row: &Row, players: &[String; 2], anchored: bool) -> Div {
                     .children(lines.iter().map(|l| div().whitespace_normal().child(l.clone())))
             }))
         }
-        Row::Move { side, game, ply, mv } => {
-            let selector = format!("search-move-{}-{game}-{ply}", players[*side]);
-            let label = || div().flex_none().px_2().child(format!("{game} · {ply} {mv}"));
+        Row::Move { ply, games } => {
+            let label = |side: usize| {
+                games[side].as_ref().map(|game| {
+                    let selector = format!("search-move-{}-{game}-{ply}", players[side]);
+                    div().debug_selector(move || selector.clone()).flex_none().px_2().child(format!("{game} · {ply}"))
+                })
+            };
             let rule = || div().flex_1().h(px(1.)).bg(if anchored { ui::accent() } else { ui::line() });
+            let selector = format!("search-rule-{ply}");
             row_div()
                 .debug_selector(move || selector.clone())
                 .h(px(20.))
@@ -532,10 +537,10 @@ fn log_row(row: &Row, players: &[String; 2], anchored: bool) -> Div {
                 .h_flex()
                 .text_color(if anchored { ui::accent() } else { ui::muted() })
                 .child(rule())
-                .when(*side == 0, |d| d.child(label()))
+                .children(label(0))
                 .child(rule())
                 .child(rule())
-                .when(*side == 1, |d| d.child(label()))
+                .children(label(1))
                 .child(rule())
         }
     }

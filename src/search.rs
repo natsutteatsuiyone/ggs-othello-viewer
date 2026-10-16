@@ -36,8 +36,10 @@ pub struct Searches {
 /// A row of two players' logs side by side.
 #[derive(Clone, PartialEq, Debug)]
 pub enum Row {
-    /// A move the server announced `players[side]` played.
-    Move { side: usize, game: String, ply: usize, mv: Move },
+    /// The `ply`th moves the server announced, each by its board under the player who played it. The two
+    /// boards of a synchro match reach a move number one after the other, so their moves share a rule
+    /// when no line came between them.
+    Move { ply: usize, games: [Option<String>; 2] },
     /// What each player sent between two moves.
     Lines([Vec<String>; 2]),
 }
@@ -45,7 +47,16 @@ pub enum Row {
 /// Where the `ply`th move of `game` falls among `rows`.
 pub fn row_of(rows: &[Row], game: &str, ply: usize) -> Option<usize> {
     // A match number comes back for a later game; the shown game is the later one.
-    rows.iter().rposition(|r| matches!(r, Row::Move { game: g, ply: p, .. } if *g == game && *p == ply))
+    rows.iter().rposition(|r| match r {
+        Row::Move { ply: p, games } => *p == ply && games.iter().flatten().any(|g| g == game),
+        Row::Lines(_) => false,
+    })
+}
+
+/// A line of dashes and nothing else.
+fn is_rule(line: &str) -> bool {
+    let line = line.trim();
+    !line.is_empty() && line.chars().all(|c| c == '-')
 }
 
 /// An engine logs every move of every game it plays; older entries are dropped past this many.
@@ -92,7 +103,18 @@ impl Searches {
         let mut rows = Vec::new();
         for (_, side, entry) in merged {
             match entry {
-                Entry::Move { game, ply, mv } => rows.push(Row::Move { side, game: game.clone(), ply: *ply, mv: *mv }),
+                Entry::Move { game, ply, .. } => match rows.last_mut() {
+                    Some(Row::Move { ply: p, games }) if p == ply && games[side].is_none() => {
+                        games[side] = Some(game.clone());
+                    }
+                    _ => {
+                        let mut games = [None, None];
+                        games[side] = Some(game.clone());
+                        rows.push(Row::Move { ply: *ply, games });
+                    }
+                },
+                // A rule some engines draw between their reports; the move rules already divide them.
+                Entry::Line(text) if is_rule(text) => {}
                 Entry::Line(text) => {
                     if !matches!(rows.last(), Some(Row::Lines(c)) if c[side].len() < ROW_LINES) {
                         rows.push(Row::Lines([Vec::new(), Vec::new()]));
@@ -164,20 +186,40 @@ mod tests {
             rows,
             [
                 lines(&["a thinks", "a decides"], &["b waits"]),
-                Row::Move { side: 0, game: ".3.0".into(), ply: 17, mv: mv("g5") },
-                Row::Move { side: 1, game: ".3.1".into(), ply: 17, mv: mv("c2") },
+                Row::Move { ply: 17, games: [Some(".3.0".into()), Some(".3.1".into())] },
                 lines(&[], &["b thinks"]),
             ]
         );
-        assert_eq!(row_of(&rows, ".3.1", 17), Some(2));
+        assert_eq!(row_of(&rows, ".3.1", 17), Some(1), "the synchro boards' 17th moves share a rule");
         assert_eq!(row_of(&rows, ".3.1", 18), None);
-        assert_eq!(s.rows(["a", "a"]).len(), 2, "one login playing itself is listed once");
+        s.add_line("b", "-----------");
+        s.add_move("a", ".3.0", 18, mv("a1"));
+        s.add_line("a", "between");
+        s.add_move("b", ".3.1", 18, mv("a2"));
+        s.add_move("b", ".3.0", 19, mv("a3"));
+        s.add_move("b", ".3.1", 19, mv("a4"));
+        let rows = s.rows(["a", "b"]);
+        let move_row =
+            |a: Option<&str>, b: Option<&str>, ply| Row::Move { ply, games: [a, b].map(|g| g.map(str::to_string)) };
+        assert_eq!(
+            rows[2..],
+            [
+                lines(&[], &["b thinks"]),
+                move_row(Some(".3.0"), None, 18),
+                lines(&["between"], &[]),
+                move_row(None, Some(".3.1"), 18),
+                move_row(None, Some(".3.0"), 19),
+                move_row(None, Some(".3.1"), 19),
+            ],
+            "a line of dashes is not shown; a line between, or the same player twice, keeps the rules apart"
+        );
+        assert_eq!(s.rows(["a", "a"]), s.rows(["a", "nobody"]), "one login playing itself is listed once");
         for _ in 0..=ROW_LINES {
             s.add_line("a", "a again");
         }
         let rows = s.rows(["a", "b"]);
         let [.., Row::Lines(full), Row::Lines(next)] = rows.as_slice() else { panic!("{rows:?}") };
-        assert_eq!((full[0].len(), &full[1][..]), (ROW_LINES, &["b thinks".to_string()][..]));
+        assert_eq!((full[0].len(), full[1].len()), (ROW_LINES, 0));
         assert_eq!((next[0].len(), next[1].len()), (1, 0), "a full row continues in the next");
     }
 }

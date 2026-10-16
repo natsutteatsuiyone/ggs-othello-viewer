@@ -3905,7 +3905,14 @@ fn the_servers_move_announcements_divide_a_players_log_on_both_synchro_boards(cx
             rows,
             [
                 Row::Lines([vec!["alice thinks".to_string()], vec!["bob waits".to_string()]]),
-                Row::Move { side, game: ".20.1".into(), ply, mv: crate::othello::Move::parse("e6").unwrap() },
+                Row::Move {
+                    ply,
+                    games: {
+                        let mut g = [None, None];
+                        g[side] = Some(".20.1".into());
+                        g
+                    }
+                },
                 Row::Lines(after),
             ],
             "what both sent between the same moves shares a row"
@@ -4019,7 +4026,8 @@ fn the_logs_scroll_to_the_shown_move_and_follow_live_only_from_the_bottom(cx: &m
         body.top() <= rule.top() && rule.bottom() <= body.bottom(),
         "browsing shows the move's rule: {rule:?} in {body:?}"
     );
-    assert!(rule.size.width >= body.size.width - px(20.), "a rule runs across both columns: {rule:?} in {body:?}");
+    let row = cx.debug_bounds(format!("search-rule-{ply}").leak()).unwrap();
+    assert!(row.size.width >= body.size.width - px(20.), "a rule runs across both columns: {row:?} in {body:?}");
     send_logs(&viewer, "bob", 5, cx);
     let still = cx.debug_bounds(format!("search-move-{mover}-.12-{ply}").leak()).unwrap();
     assert_eq!(still.top(), rule.top(), "a line arriving while browsing leaves the scroll alone");
