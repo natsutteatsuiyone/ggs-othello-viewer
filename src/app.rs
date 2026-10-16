@@ -1412,8 +1412,7 @@ impl Viewer {
             return (room, None);
         }
         let (height, taken) = engine_logs_h(room.height);
-        let logs =
-            div().px_4().pb_4().child(engine_logs(searches, scroll, game, None, false, room.width, height));
+        let logs = div().px_4().pb_4().child(engine_logs(searches, scroll, game, None, false, room.width, height));
         (size(room.width, room.height - taken), Some(logs))
     }
 
