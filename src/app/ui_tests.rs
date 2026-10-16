@@ -3864,9 +3864,14 @@ fn engine_logs_join_both_players_channels_and_reports_stay_out_of_the_chat(cx: &
         })
     });
     settle(cx);
-    assert!(cx.debug_bounds("search").is_some_and(|s| s.size.height > button.size.height * 3.), "the report is shown");
+    let board = cx.debug_bounds("focus-board").unwrap();
+    assert!(
+        cx.debug_bounds("search").is_some_and(|s| s.top() > board.bottom()),
+        "the engine boxes sit under the board"
+    );
     let button = cx.debug_bounds("search-follow").unwrap();
     cx.simulate_click(button.center(), Default::default());
     settle(cx);
     cx.update(|_, cx| assert!(sent(viewer.read(cx), "> chann - .alice .bob")));
+    assert!(cx.debug_bounds("search").is_none(), "leaving the channels removes the boxes");
 }

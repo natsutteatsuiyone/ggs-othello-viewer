@@ -360,6 +360,70 @@ pub(super) fn player_panel(game: &Game, at: At, flipped: bool, now: Instant, wid
         .child(cell(right))
 }
 
+/// Each player's engine report on their latest move up to position `at`, in boxes under the player panels'
+/// columns. Every box keeps four rows, so a report arriving or the position changing never resizes the board.
+pub(super) fn engine_logs(game: &Game, at: At, flipped: bool, width: f32) -> Div {
+    let k = at.unwrap_or(game.moves().len());
+    let cell = |color: Color| {
+        let p = match color {
+            Color::Black => &game.black,
+            Color::White => &game.white,
+        };
+        let mv = game.moves()[..k].iter().rev().find(|m| m.color == color && m.token.mv != crate::othello::Move::Pass);
+        let log = mv.and_then(|m| game.search(m.token.mv));
+        let joined = |parts: &[Option<String>], sep: &str| {
+            let parts: Vec<&str> = parts.iter().flatten().map(String::as_str).collect();
+            parts.join(sep)
+        };
+        let rows: [(String, bool); 3] = match log {
+            Some(log) => [
+                (log.pv.as_ref().map(|pv| format!("PV  {pv}")).unwrap_or_default(), false),
+                (joined(&[log.nodes.clone(), log.time.clone(), log.speed.clone()], " · "), false),
+                (log.rest.join(" / "), true),
+            ],
+            None if mv.is_some() => [("No search log.".into(), true), Default::default(), Default::default()],
+            None => Default::default(),
+        };
+        let line = |text: String, muted: bool| {
+            div().h(px(18.)).min_w_0().truncate().when(muted, |d| d.text_color(ui::muted())).child(text)
+        };
+        div()
+            .flex_1()
+            .min_w_0()
+            .v_flex()
+            .px_3()
+            .py_2()
+            .rounded(px(ui::RADIUS))
+            .bg(ui::surface())
+            .font_family(ui::MONO)
+            .text_xs()
+            .child(
+                div()
+                    .h(px(18.))
+                    .h_flex()
+                    .gap_2()
+                    .child(ui::disc(color, ui::DISC_SM))
+                    .child(div().flex_1().min_w_0().truncate().font_weight(FontWeight::SEMIBOLD).child(match mv {
+                        Some(m) => format!("{} · {}", p.name, m.token.mv),
+                        None => p.name.clone(),
+                    }))
+                    .children(log.map(|log| {
+                        let score = log.score.as_ref().map(|s| format!("score {s}"));
+                        div().flex_none().child(joined(&[log.depth.clone(), score], "  "))
+                    })),
+            )
+            .children(rows.into_iter().map(|(text, muted)| line(text, muted)))
+    };
+    let (left, right) = if flipped { (Color::White, Color::Black) } else { (Color::Black, Color::White) };
+    div()
+        .debug_selector(|| "search".into())
+        .w(px(width))
+        .flex()
+        .gap(px(ui::PANEL_GAP))
+        .child(cell(left))
+        .child(cell(right))
+}
+
 pub(super) fn under_board<T: 'static>(
     game: &Game,
     at: At,
