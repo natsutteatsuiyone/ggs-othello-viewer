@@ -4076,3 +4076,36 @@ fn an_archived_game_offers_no_engine_logs(cx: &mut TestAppContext) {
     assert!(cx.debug_bounds("search-follow").is_none(), "no log is about an archived game");
     assert!(cx.debug_bounds("search").is_none());
 }
+
+#[gpui_kit::test]
+fn switching_synchro_boards_keeps_each_players_log_column(cx: &mut TestAppContext) {
+    let (viewer, cx) = fixture(cx);
+    add_synchro_pair(&viewer, cx);
+    follow_engine_logs("search-follow", cx);
+    send_logs(&viewer, "alice", 1, cx);
+    announce_a_move(&viewer, ".20.0", cx);
+    announce_a_move(&viewer, ".20.1", cx);
+    let alice_left = |cx: &mut VisualTestContext| {
+        let body = cx.debug_bounds("search-body").unwrap();
+        cx.debug_bounds("search-name-alice").unwrap().center().x < body.center().x
+    };
+    let on_first = alice_left(cx);
+    let panel =
+        |cx: &mut VisualTestContext, id: &str| cx.debug_bounds(format!("player-cell-{id}-black").leak()).unwrap();
+    let first_black = panel(cx, ".20.0");
+    cx.update(|_, cx| {
+        viewer.update(cx, |v, cx| {
+            v.with_lobby(cx, |l| {
+                l.show(".20.1");
+                Vec::new()
+            })
+        })
+    });
+    settle(cx);
+    assert!(cx.debug_bounds("player-cell-.20.1-black").is_some(), "the second board is shown");
+    assert_eq!(panel(cx, ".20.1").left(), first_black.left(), "the panels put black first on both boards");
+    assert_eq!(alice_left(cx), on_first, "but alice keeps her log column on both boards");
+    cx.update(|_, cx| viewer.update(cx, |v, cx| v.flip(cx)));
+    settle(cx);
+    assert_ne!(alice_left(cx), on_first, "Flip still swaps the columns");
+}

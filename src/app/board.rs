@@ -373,10 +373,13 @@ pub(super) fn engine_logs_h(column_h: f32) -> (f32, f32) {
     (h, h + 68.)
 }
 
-/// The players as the logs list them, left first: as the player panels show them.
+/// The players as the logs list them, left first: black first, as the player panels show them, unless
+/// flipped. The colors swap on a synchro match's second board, but its logs keep the first board's order,
+/// so switching boards leaves each player's column where it was.
 fn log_players(game: &Game, flipped: bool) -> [&str; 2] {
     let (b, w) = (game.black.name.as_str(), game.white.name.as_str());
-    if flipped { [w, b] } else { [b, w] }
+    let second = game.is_synchro() && game.id.ends_with(".1");
+    if flipped != second { [w, b] } else { [b, w] }
 }
 
 /// The engine logs' list, the rows it holds, and what it showed when last drawn. Only the rows in view are
@@ -473,7 +476,15 @@ pub(super) fn engine_logs(
     let anchor = at.and_then(|k| row_of(&rows, &game.id, k));
     let names = players.map(str::to_string);
     let column = || div().flex_1().min_w_0().v_flex();
-    let name = |n: &str| column().h(px(20.)).truncate().font_weight(FontWeight::SEMIBOLD).child(n.to_string());
+    let name = |n: &str| {
+        let selector = format!("search-name-{n}");
+        column()
+            .debug_selector(move || selector.clone())
+            .h(px(20.))
+            .truncate()
+            .font_weight(FontWeight::SEMIBOLD)
+            .child(n.to_string())
+    };
     let list =
         list(scroll.list.clone(), move |i, _, _| log_row(&rows[i], &names, anchor == Some(i)).into_any_element());
     div()
