@@ -391,6 +391,9 @@ pub(super) fn scroll_search_logs(scroll: &ScrollHandle, searches: &Searches, gam
 
 /// The room between the logs' two columns, the center line in its middle.
 const LOG_GUTTER: f32 = 32.;
+/// Room at the logs' right edge for the scrollbar, which overlays it; the names keep it too, to stay over
+/// their columns.
+const LOG_SCROLLBAR: f32 = 12.;
 
 /// The two players' engine logs under the board, one column each under their player panels: what each sent
 /// to its log channel, as it was sent, in arrival order. A rule across both columns marks each move the
@@ -451,18 +454,28 @@ pub(super) fn engine_logs(
         .text_sm()
         .relative()
         // A faint line between the columns, from the names to the bottom, unbroken by the rules.
-        .child(div().absolute().top_3().bottom_3().left(px(width / 2. - 0.5)).w(px(1.)).bg(ui::line()))
-        .child(div().h_flex().gap(px(LOG_GUTTER)).child(name(players[0])).child(name(players[1])))
+        .child(
+            div().absolute().top_3().bottom_3().left(px((width - LOG_SCROLLBAR) / 2. - 0.5)).w(px(1.)).bg(ui::line()),
+        )
+        .child(div().h_flex().gap(px(LOG_GUTTER)).pr(px(LOG_SCROLLBAR)).child(name(players[0])).child(name(players[1])))
+        // The scrollbar overlays a still frame, as the center column's does.
         .child(
             div()
-                .id("search-body")
-                .track_scroll(scroll)
+                .relative()
                 .h(px(height))
-                .overflow_y_scroll()
-                .v_flex()
-                .font_family(ui::MONO)
-                .text_xs()
-                .children(rows),
+                .child(
+                    div()
+                        .id("search-body")
+                        .track_scroll(scroll)
+                        .size_full()
+                        .overflow_y_scroll()
+                        .v_flex()
+                        .pr(px(LOG_SCROLLBAR))
+                        .font_family(ui::MONO)
+                        .text_xs()
+                        .children(rows),
+                )
+                .vertical_scrollbar(scroll),
         )
 }
 
