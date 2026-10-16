@@ -1,15 +1,10 @@
 //! `ggs.db`: logins, settings and chat lines. Chat rows carry their server as `host:port`.
 
-use crate::history::History;
 use rusqlite::Connection;
 use std::path::Path;
 use std::time::{Duration, Instant, SystemTime};
 
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
-
-/// Files of earlier versions, imported once and then deleted.
-const LOGIN_FILE: &str = "ggs-login.txt";
-const THEME_FILE: &str = "ggs-theme.txt";
 
 /// Each owner (the viewer, a chat) opens its own connection; WAL lets them write side by side.
 pub fn open() -> rusqlite::Result<Connection> {
@@ -34,10 +29,6 @@ fn open_at(path: &Path) -> rusqlite::Result<Connection> {
     }
     db.execute_batch("PRAGMA synchronous=NORMAL")?;
     init(&db)?;
-    import_legacy(&db, path.parent().unwrap_or(Path::new("")))?;
-    // Versions before the data folder kept these files in the working directory.
-    #[cfg(not(test))]
-    import_legacy(&db, Path::new(""))?;
     Ok(db)
 }
 
@@ -48,38 +39,9 @@ pub fn init(db: &Connection) -> rusqlite::Result<()> {
          CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT NOT NULL);
          CREATE TABLE IF NOT EXISTS chat(id INTEGER PRIMARY KEY, server TEXT NOT NULL, login TEXT NOT NULL, at TEXT NOT NULL, conversation TEXT NOT NULL, sender TEXT NOT NULL, line TEXT NOT NULL);
          CREATE INDEX IF NOT EXISTS chat_server ON chat(server, id);",
-    )?;
-    // Earlier versions kept a protocol trace that nothing read.
-    db.execute_batch("DROP TABLE IF EXISTS raw")?;
-    // Earlier versions kept lines to send after login; the app no longer sends typed commands.
-    let has_commands: bool =
-        db.query_row("SELECT EXISTS (SELECT 1 FROM pragma_table_info('logins') WHERE name = 'commands')", [], |r| {
-            r.get(0)
-        })?;
-    if has_commands {
-        db.execute_batch("ALTER TABLE logins DROP COLUMN commands")?;
-    }
-    Ok(())
+    )
 }
 
-/// Moves `ggs-login.txt` and `ggs-theme.txt` from `dir` into the db. Logins and theme already in the db win.
-pub fn import_legacy(db: &Connection, dir: &Path) -> rusqlite::Result<()> {
-    let login = dir.join(LOGIN_FILE);
-    if let Ok(text) = std::fs::read_to_string(&login) {
-        if db.query_row("SELECT NOT EXISTS (SELECT 1 FROM logins)", [], |r| r.get(0))? {
-            History::parse(&text).save(db)?;
-        }
-        let _ = std::fs::remove_file(&login);
-    }
-    let theme = dir.join(THEME_FILE);
-    if let Ok(text) = std::fs::read_to_string(&theme) {
-        db.execute("INSERT OR IGNORE INTO settings(key, value) VALUES ('theme', ?1)", [text.trim()])?;
-        let _ = std::fs::remove_file(&theme);
-    }
-    Ok(())
-}
-
-/// `2026-10-01 03:43:01.123Z`.
 /// The value under `key` in the settings table; empty when missing or unreadable.
 pub fn setting(db: &Connection, key: &str) -> String {
     db.query_row("SELECT value FROM settings WHERE key = ?1", [key], |r| r.get(0)).unwrap_or_default()
@@ -107,6 +69,7 @@ pub fn mark_password_saved(db: &Connection, key: &str, saved: bool) -> rusqlite:
     db.execute(sql, [key]).map(drop)
 }
 
+/// `2026-10-01 03:43:01.123Z`.
 pub fn utc_stamp(t: SystemTime) -> String {
     chrono::DateTime::<chrono::Utc>::from(t).format("%Y-%m-%d %H:%M:%S%.3fZ").to_string()
 }
@@ -121,7 +84,7 @@ pub fn memory() -> Connection {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::history::Entry;
+    use crate::history::{Entry, History};
     use std::time::UNIX_EPOCH;
 
     fn entry(host: &str, login: &str) -> Entry {
@@ -141,53 +104,6 @@ mod tests {
         assert_eq!(loaded, h);
         assert_eq!(loaded.logins("a.net", "5000").map(|e| e.login.as_str()).collect::<Vec<_>>(), ["ann", "cid"]);
         assert_eq!(loaded.logins("b.net", "5000").map(|e| e.login.as_str()).collect::<Vec<_>>(), ["bea"]);
-    }
-
-    #[test]
-    fn legacy_login_file_is_imported_once_and_removed() {
-        let dir = std::env::temp_dir().join(format!("ggs-store-import-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(dir.join(LOGIN_FILE), "a.net\t5000\tann\twho\nb.net\t5000\tbea\t\n").unwrap();
-        std::fs::write(dir.join(THEME_FILE), "Dark\n").unwrap();
-        let db = memory();
-        import_legacy(&db, &dir).unwrap();
-        assert!(!dir.join(LOGIN_FILE).exists() && !dir.join(THEME_FILE).exists());
-        std::fs::write(dir.join(LOGIN_FILE), "c.net\t5000\tcid\t\n").unwrap();
-        import_legacy(&db, &dir).unwrap();
-        let _ = std::fs::remove_dir_all(&dir);
-        let h = History::load(&db).unwrap();
-        assert_eq!(
-            h.servers().iter().map(|e| e.host.as_str()).collect::<Vec<_>>(),
-            ["a.net", "b.net"],
-            "a second file does not replace imported logins"
-        );
-        assert_eq!(
-            db.query_row("SELECT value FROM settings WHERE key = 'theme'", [], |r| r.get::<_, String>(0)).unwrap(),
-            "Dark"
-        );
-    }
-
-    #[test]
-    fn the_commands_column_of_earlier_versions_is_dropped() {
-        let db = Connection::open_in_memory().unwrap();
-        db.execute_batch("CREATE TABLE logins(host TEXT NOT NULL, port TEXT NOT NULL, login TEXT NOT NULL, commands TEXT NOT NULL, rank INTEGER NOT NULL, PRIMARY KEY(host, port, login));
-             INSERT INTO logins VALUES ('a.net', '5000', 'ann', 'tell /os play', 0);").unwrap();
-        init(&db).unwrap();
-        init(&db).unwrap();
-        assert!(db.prepare("SELECT commands FROM logins").is_err(), "the stored commands are gone");
-        assert_eq!(
-            History::load(&db).unwrap().latest().map(|e| e.login.as_str()),
-            Some("ann"),
-            "the login itself is kept"
-        );
-    }
-
-    #[test]
-    fn the_raw_table_of_earlier_versions_is_dropped() {
-        let db = Connection::open_in_memory().unwrap();
-        db.execute_batch("CREATE TABLE raw(id INTEGER PRIMARY KEY, line TEXT NOT NULL)").unwrap();
-        init(&db).unwrap();
-        assert!(db.prepare("SELECT line FROM raw").is_err());
     }
 
     #[test]

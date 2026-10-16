@@ -128,7 +128,7 @@ pub enum TdMsg {
 #[derive(Default, Debug)]
 pub struct Tourneys {
     pub list: Option<Vec<Summary>>,
-    info: BTreeMap<String, Info>,
+    pub info: BTreeMap<String, Info>,
     pub schedules: BTreeMap<String, Vec<Pairing>>,
     pub standings: BTreeMap<String, Vec<Standing>>,
     /// Each tournament's countdown to its next round from the newest reply of either kind, so the list
@@ -185,16 +185,12 @@ impl Tourneys {
 
     /// Whether a finger or tourneys reply has shown `id` started.
     pub fn started(&self, id: &str) -> bool {
-        self.info(id).is_some_and(Info::started)
+        self.info.get(id).is_some_and(Info::started)
             || self.rows().iter().any(|s| s.id == id && (s.played > 0 || !matches!(s.start, Start::In(_))))
     }
 
     pub fn rows(&self) -> &[Summary] {
         self.list.as_deref().unwrap_or_default()
-    }
-
-    pub fn info(&self, id: &str) -> Option<&Info> {
-        self.info.get(id)
     }
 
     pub fn summary(&self, id: &str) -> Option<&Summary> {
@@ -204,12 +200,12 @@ impl Tourneys {
     /// Whether finger or the list shows the end.
     pub fn finished(&self, id: &str) -> bool {
         self.summary(id).is_some_and(|s| s.start == Start::Done)
-            || self.info(id).is_some_and(|i| i.status == "tournament has finished")
+            || self.info.get(id).is_some_and(|i| i.status == "tournament has finished")
     }
 
     /// Whether `id`'s page is loaded after its end, so it no longer changes.
     pub fn settled(&self, id: &str) -> bool {
-        self.info(id).is_some_and(|i| i.status == "tournament has finished")
+        self.info.get(id).is_some_and(|i| i.status == "tournament has finished")
             && self.schedules.contains_key(id)
             && self.standings.contains_key(id)
     }
@@ -231,7 +227,7 @@ impl Tourneys {
         let ranked =
             self.standings.get(id).filter(|s| !s.is_empty()).map(|s| s.iter().map(|s| s.login.clone()).collect());
         ranked
-            .or_else(|| self.info(id).map(|i| i.players.clone()))
+            .or_else(|| self.info.get(id).map(|i| i.players.clone()))
             .unwrap_or_default()
             .into_iter()
             .filter(|p| !p.starts_with('('))
@@ -242,7 +238,7 @@ impl Tourneys {
     /// How many play in a `tourneys` row: finger's players without the filler once known, else the
     /// row's own count, which takes in the filler of an odd field.
     pub fn player_count(&self, s: &Summary) -> usize {
-        match self.info(&s.id) {
+        match self.info.get(&s.id) {
             Some(i) => i.players.iter().filter(|p| !p.starts_with('(')).count(),
             None => s.players as usize,
         }
@@ -826,7 +822,7 @@ mod tests {
         let mut checked = 0;
         for (id, standings) in t.standings.iter().filter(|(id, s)| !s.is_empty() && t.finished(id)) {
             let schedule = &t.schedules[id];
-            let max = crate::othello::playable_squares(&t.info(id).unwrap().game_type).unwrap() as f64;
+            let max = crate::othello::playable_squares(&t.info.get(id).unwrap().game_type).unwrap() as f64;
             let rebuilt = rankings(&t.players(id), schedule, decided(schedule), max);
             assert_eq!(printed(&rebuilt), printed(standings), "tournament {id}");
             checked += 1;

@@ -146,18 +146,6 @@ pub fn felt() -> Rgba {
 pub fn felt_line() -> Rgba {
     rgb(0x123527)
 }
-fn disc_black() -> Rgba {
-    rgb(0x0c0c0e)
-}
-fn disc_black_edge() -> Rgba {
-    rgb(0x5b5e66)
-}
-fn disc_white() -> Rgba {
-    rgb(0xf4f4f2)
-}
-fn disc_white_edge() -> Rgba {
-    rgb(0x0c0c0e)
-}
 pub fn last_ring() -> Rgba {
     rgb(0xffffff)
 }
@@ -171,17 +159,13 @@ pub fn accent() -> Rgba {
 fn accent_hover() -> Rgba {
     pick(0x6ee7b7, 0x0f6e49)
 }
-/// The LIVE tag of a game, and a loss or a fall in the standings.
+/// The LIVE tag of a game, a loss or a fall in the standings, and a failed connect on the login screen.
 pub fn live() -> Rgba {
     pick(0xf0616d, 0xd6304a)
 }
 /// A connection that is being opened or retried, and a tournament game still being played.
 pub fn pending() -> Rgba {
     pick(0xf5a524, 0xb86e00)
-}
-/// A failed connect on the login screen.
-pub fn error() -> Rgba {
-    pick(0xf0616d, 0xd6304a)
 }
 /// The places of the top three in a tournament, first to third.
 pub fn medal(place: usize) -> Option<Rgba> {
@@ -290,8 +274,8 @@ pub fn boxed() -> Div {
 
 pub fn disc(color: Color, size: f32) -> Div {
     let (fill, edge) = match color {
-        Color::Black => (disc_black(), disc_black_edge()),
-        Color::White => (disc_white(), disc_white_edge()),
+        Color::Black => (rgb(0x0c0c0e), rgb(0x5b5e66)),
+        Color::White => (rgb(0xf4f4f2), rgb(0x0c0c0e)),
     };
     div().flex_none().size(px(size)).rounded_full().bg(fill).border_1().border_color(edge)
 }

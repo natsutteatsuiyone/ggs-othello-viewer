@@ -113,7 +113,7 @@ impl Viewer {
                 ui::LOADING
             })
         };
-        let about = match t.info(id) {
+        let about = match t.info.get(id) {
             None => ui::placeholder(ui::LOADING),
             Some(info) => {
                 let style = match info.style {
@@ -489,7 +489,7 @@ pub(super) fn match_row(lobby: &Lobby, i: usize, entry: &MatchEntry, cx: &mut Co
         .on_click(cx.listener(move |this, event: &ClickEvent, _, cx| {
             this.watch(&id, cx);
             if event.click_count() == 2 {
-                this.open_live_match_window(&id, cx);
+                this.open_match_window(&id, true, cx);
             }
         }))
 }
@@ -529,7 +529,7 @@ pub(super) fn finished_row(lobby: &Lobby, i: usize, ended: &FinishedMatch, cx: &
                             cx.stop_propagation();
                             match (held, &window_archive) {
                                 (false, Some(key)) => this.open_archive_window(key, cx),
-                                _ => this.open_match_window(&window_id, cx),
+                                _ => this.open_match_window(&window_id, false, cx),
                             }
                         },
                     )))
@@ -883,11 +883,11 @@ fn standings_table(
     let past = as_of.map(|n| {
         let schedule: Vec<td::Pairing> = schedule.iter().filter(|p| p.round <= n).cloned().collect();
         // finger brings the match type with the rest of the page; until then, the usual 8×8.
-        let max = t.info(id).and_then(|i| crate::othello::playable_squares(&i.game_type)).unwrap_or(64);
+        let max = t.info.get(id).and_then(|i| crate::othello::playable_squares(&i.game_type)).unwrap_or(64);
         let standings = td::rankings(&t.players(id), &schedule, n, max as f64);
         (schedule, standings)
     });
-    let swiss = t.info(id).is_some_and(|i| i.style == td::Style::Swiss);
+    let swiss = t.info.get(id).is_some_and(|i| i.style == td::Style::Swiss);
     // From the whole schedule, so a past round shows the same.
     let per_pair = td::games_per_pair(&td::crosstable(&t.players(id), schedule)).filter(|_| !swiss);
     let (schedule, players, standings) = match &past {
@@ -898,7 +898,7 @@ fn standings_table(
     };
     let moved = if as_of.is_none() && t.finished(id) { Default::default() } else { td::movement(schedule) };
     let medals = !standings.is_empty() && td::decided(schedule) > 0;
-    let rounds = schedule.iter().map(|p| p.round).chain(t.info(id).map(|i| i.rounds)).max().unwrap_or(0);
+    let rounds = schedule.iter().map(|p| p.round).chain(t.info.get(id).map(|i| i.rounds)).max().unwrap_or(0);
     let crosstable = td::crosstable(&players, schedule);
     let round_table = td::rounds_table(&players, schedule, rounds);
     let games = !schedule.is_empty();
@@ -1083,14 +1083,11 @@ const PAIRING_H: f32 = 61.;
 /// that player's side, like a live tile. The winner is bold, the margin green or red. A game being
 /// played shows its board when clicked, like the tiles.
 fn pairing_row(p: &td::Pairing, lobby: &Lobby, cx: &mut Context<Viewer>) -> Stateful<Div> {
-    let margin = match p.result {
-        td::Outcome::Margin { black, .. } => Some(black),
-        _ => None,
-    };
-    let ending = match p.result {
-        td::Outcome::Margin { ending: td::Ending::Resigned, .. } => Some("resigned"),
-        td::Outcome::Margin { ending: td::Ending::Timeout, .. } => Some("on time"),
-        _ => None,
+    let (margin, ending) = match p.result {
+        td::Outcome::Margin { black, ending: td::Ending::Resigned } => (Some(black), Some("resigned")),
+        td::Outcome::Margin { black, ending: td::Ending::Timeout } => (Some(black), Some("on time")),
+        td::Outcome::Margin { black, .. } => (Some(black), None),
+        _ => (None, None),
     };
     let playing = p.result == td::Outcome::Playing;
     let line = |color: Color, login: Option<&str>| {

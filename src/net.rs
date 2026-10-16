@@ -77,12 +77,15 @@ pub fn is_secret(line: &str) -> bool {
     line.split(['\r', '\n']).any(|line| command_words(line).next() == Some("passw"))
 }
 
-/// GGS splits on C `isspace`; standalone `:`/`;` words recurse into the command.
+/// GGS splits on C `isspace`; `split_whitespace` would also split on U+00A0 or U+3000.
+pub(crate) fn is_space(c: char) -> bool {
+    matches!(c, ' ' | '\t' | '\n' | '\x0B' | '\x0C' | '\r')
+}
+
+/// Standalone `:`/`;` words recurse into the command.
 /// Prefixes attached to a word and server aliases remain distinct, unknown commands.
 pub(crate) fn command_words(line: &str) -> impl Iterator<Item = &str> {
-    line.split([' ', '\t', '\n', '\x0B', '\x0C', '\r'])
-        .filter(|word| !word.is_empty())
-        .skip_while(|word| *word == ":" || *word == ";")
+    line.split(is_space).filter(|word| !word.is_empty()).skip_while(|word| *word == ":" || *word == ";")
 }
 
 /// GGS takes 2 to 8 characters; an unregistered name logs in with an empty password.

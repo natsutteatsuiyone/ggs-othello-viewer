@@ -179,32 +179,27 @@ impl MatchWindow {
 impl Viewer {
     pub(super) fn open_archive_window(&mut self, key: &str, cx: &mut Context<Self>) {
         self.with_lobby(cx, |lobby| lobby.request_look(key));
-        self.open_match_window(&crate::game::archive_id(key), cx);
+        self.open_match_window(&crate::game::archive_id(key), false, cx);
     }
 
     pub(super) fn watch_in_window(&mut self, id: &str, cx: &mut Context<Self>) {
         self.with_lobby(cx, |lobby| lobby.request_watch(id));
-        self.open_live_match_window(id, cx);
+        self.open_match_window(id, true, cx);
     }
 
-    pub(super) fn open_match_window(&mut self, id: &str, cx: &mut Context<Self>) {
-        self.open_match_window_for(id, false, cx);
-    }
-
-    pub(super) fn open_live_match_window(&mut self, id: &str, cx: &mut Context<Self>) {
-        self.open_match_window_for(id, true, cx);
-    }
-
-    fn open_match_window_for(&mut self, id: &str, live: bool, cx: &mut Context<Self>) {
+    pub(super) fn open_match_window(&mut self, id: &str, live: bool, cx: &mut Context<Self>) {
         let Some((_, lobby)) = self.session.connected() else { return };
         let state = MatchState::open(id, live, lobby);
         let id = state.id.clone();
-        let held = lobby.games.values().filter(|game| match_of(&game.id) == id).collect::<Vec<_>>();
         let listed_players = lobby.matches.iter().find_map(|entry| match entry {
             MatchEntry::Summary(m) if match_of(&m.id) == id => Some(format!("{} vs {}", m.player1, m.player2)),
             _ => None,
         });
-        let held_players = held.first().map(|game| format!("{} vs {}", game.black.name, game.white.name));
+        let held_players = lobby
+            .games
+            .values()
+            .find(|game| match_of(&game.id) == id)
+            .map(|game| format!("{} vs {}", game.black.name, game.white.name));
         let players = if state.historical { held_players.or(listed_players) } else { listed_players.or(held_players) };
         let title =
             players.map_or_else(|| format!("GGS Othello · {id}"), |players| format!("{players} · {id} · GGS Othello"));
@@ -327,36 +322,10 @@ impl Render for MatchWindow {
                                             .gap_2()
                                             .px_4()
                                             .pt_3()
-                                            .child(
-                                                TabBar::new("child-view")
-                                                    .segmented()
-                                                    .small()
-                                                    .selected_index(if self.state.mode == ViewMode::Focus {
-                                                        0
-                                                    } else {
-                                                        1
-                                                    })
-                                                    .on_click(cx.listener(|this, index: &usize, _, cx| {
-                                                        this.state.mode = if *index == 0 {
-                                                            ViewMode::Focus
-                                                        } else {
-                                                            ViewMode::Synchro
-                                                        };
-                                                        cx.notify();
-                                                    }))
-                                                    .child(
-                                                        Tab::new()
-                                                            .cursor_pointer()
-                                                            .label("Focus")
-                                                            .debug_selector(|| "child-focus-tab".into()),
-                                                    )
-                                                    .child(
-                                                        Tab::new()
-                                                            .cursor_pointer()
-                                                            .label("Synchro")
-                                                            .debug_selector(|| "child-synchro-tab".into()),
-                                                    ),
-                                            )
+                                            .child(view_tabs("child-view", "child", self.state.mode, cx, |this, mode, cx| {
+                                                this.state.mode = mode;
+                                                cx.notify();
+                                            }))
                                             .when(self.state.mode == ViewMode::Focus, |d| {
                                                 d.child(self.render_halves(cx))
                                             }),

@@ -128,7 +128,7 @@ pub struct Game {
 
 impl Game {
     pub(crate) fn is_synchro_type(game_type: &str) -> bool {
-        game_type.starts_with('s') || game_type.starts_with('S')
+        game_type.starts_with(['s', 'S'])
     }
 
     pub(crate) fn is_synchro(&self) -> bool {
@@ -339,17 +339,9 @@ impl Game {
         }
         let result = self.black_result().or(self.record_result);
         let reason = self.result_reason.as_deref().filter(|_| result == self.record_result);
-        s += "RE[";
-        match result {
-            Some(r) => {
-                let _ = write!(s, "{r:+.3}");
-            }
-            None => s += "?",
-        }
-        if let Some(reason) = reason {
-            let _ = write!(s, ":{reason}");
-        }
-        s += "]";
+        let result = result.map_or("?".into(), |r| format!("{r:+.3}"));
+        let reason = reason.map_or(String::new(), |r| format!(":{r}"));
+        let _ = write!(s, "RE[{result}{reason}]");
         let _ = write!(s, "BO[{}]", self.positions[0].board.to_bo());
         for m in &self.moves {
             let _ = write!(s, "{}[{}]", if m.color == Color::Black { "B" } else { "W" }, m.token);

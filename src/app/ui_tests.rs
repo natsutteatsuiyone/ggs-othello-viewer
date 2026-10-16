@@ -1038,7 +1038,7 @@ fn synchro_view_survives_reconnect_and_waits_for_each_board(cx: &mut TestAppCont
     let records = cx.update(|_, cx| {
         viewer.update(cx, |v, cx| {
             let Some((_, lobby)) = v.session.connected_mut() else { unreachable!() };
-            lobby.focus_on(".20.1".into());
+            lobby.focus = Some(".20.1".into());
             v.board.views.navigate(lobby.focused().unwrap(), crate::game::Nav::First);
             v.board.views.get_mut(lobby.focused().unwrap()).flipped = true;
             let records: Vec<_> = lobby.halves().map(|g| (g.id.clone(), g.to_ggf())).collect();
@@ -1527,7 +1527,7 @@ fn child_focus_browses_each_half_independently_and_survives_reopen(cx: &mut Test
                 OsMsg::Update { id: ".20.0".into(), token: crate::othello::MoveToken::parse("e6//3").unwrap() },
                 Instant::now(),
             );
-            v.open_match_window(".20", cx);
+            v.open_match_window(".20", false, cx);
             cx.notify();
         })
     });
@@ -1593,7 +1593,7 @@ fn child_focus_browses_each_half_independently_and_survives_reopen(cx: &mut Test
     });
     settle(&mut child);
     assert!(child.debug_bounds("focus-position-0").is_some(), "live updates preserve a child browsing history");
-    cx.update(|_, cx| viewer.update(cx, |v, cx| v.open_match_window(".20", cx)));
+    cx.update(|_, cx| viewer.update(cx, |v, cx| v.open_match_window(".20", false, cx)));
     settle(cx);
     settle(&mut child);
     assert!(child.debug_bounds("focus-position-0").is_some(), "reopening the same match preserves its Focus state");
@@ -1744,8 +1744,8 @@ fn match_windows_open_once_and_share_live_boards_without_main_view_state(cx: &mu
     assert_eq!(cx.cx.windows().len(), 2);
     cx.update(|_, cx| {
         viewer.update(cx, |v, cx| {
-            v.open_match_window(".13", cx);
-            v.open_match_window(".13", cx);
+            v.open_match_window(".13", false, cx);
+            v.open_match_window(".13", false, cx);
         })
     });
     settle(cx);
@@ -1866,7 +1866,7 @@ fn live_match_window_waits_for_a_recycled_number_before_binding_the_new_join(cx:
     for existing_window in [false, true] {
         let (viewer, cx) = fixture(cx);
         if existing_window {
-            cx.update(|_, cx| viewer.update(cx, |v, cx| v.open_match_window(".12", cx)));
+            cx.update(|_, cx| viewer.update(cx, |v, cx| v.open_match_window(".12", false, cx)));
             settle(cx);
         }
         cx.update(|_, cx| {
@@ -2398,7 +2398,7 @@ fn finished_window_must_not_open_a_recycled_live_id(cx: &mut TestAppContext) {
 fn synchro_child_hints_must_be_independent_of_the_main_window(cx: &mut TestAppContext) {
     let (viewer, cx) = fixture(cx);
     add_synchro_pair(&viewer, cx);
-    cx.update(|_, cx| viewer.update(cx, |v, cx| v.open_match_window(".20", cx)));
+    cx.update(|_, cx| viewer.update(cx, |v, cx| v.open_match_window(".20", false, cx)));
     settle(cx);
     let mut child = child_context(&viewer, ".20", cx);
     settle(&mut child);
@@ -2423,7 +2423,7 @@ fn undo_clamps_both_windows_before_the_next_join(cx: &mut TestAppContext) {
     cx.update(|_, cx| {
         viewer.update(cx, |v, cx| {
             v.navigate(crate::game::Nav::Prev, cx);
-            v.open_match_window(".12", cx);
+            v.open_match_window(".12", false, cx);
         })
     });
     settle(cx);

@@ -258,15 +258,15 @@ fn each_game_keeps_its_view_across_focus_changes_and_updates() {
     views.navigate(lobby.focused().unwrap(), Nav::Next);
     assert_eq!(lobby.focused().and_then(|g| views.get(g).cursor), None);
     views.navigate(lobby.focused().unwrap(), Nav::First);
-    lobby.focus_on(".12".into());
+    lobby.focus = Some(".12".into());
     assert_eq!(lobby.focused().and_then(|g| views.get(g).cursor), Some(0), "refocusing the same game keeps the cursor");
-    lobby.focus_on(".13".into());
+    lobby.focus = Some(".13".into());
     assert_eq!(lobby.focused().and_then(|g| views.get(g).cursor), None);
     lobby.apply(OsMsg::Join { id: ".13".into(), record: Box::new(GameRecord::parse(SPEC_JOIN).unwrap()) }, now);
     views.navigate(lobby.focused().unwrap(), Nav::Prev);
     let other = GameView { cursor: Some(1), flipped: true, hints: false };
     *views.get_mut(lobby.focused().unwrap()) = other;
-    lobby.focus_on(".12".into());
+    lobby.focus = Some(".12".into());
     assert_eq!(views.get(lobby.focused().unwrap()), GameView { cursor: Some(0), ..Default::default() });
     lobby.show_view(ViewMode::Synchro);
     lobby.show(".13");
@@ -285,7 +285,7 @@ fn recycled_match_ids_do_not_keep_the_previous_games_view() {
         views.get_mut(lobby.focused().unwrap()).flipped = true;
         lobby.games.get_mut(".12").unwrap().observers.insert("eve".into());
         lobby.games.get_mut(".12").unwrap().text.push("old match".into());
-        lobby.focus_on(".13".into());
+        lobby.focus = Some(".13".into());
         let mut record = GameRecord::parse(SPEC_JOIN).unwrap();
         match change {
             0 => {
@@ -303,7 +303,7 @@ fn recycled_match_ids_do_not_keep_the_previous_games_view() {
             lobby.restoring_games.insert(".12".into(), old);
         }
         lobby.apply(OsMsg::Join { id: ".12".into(), record: Box::new(record) }, now);
-        lobby.focus_on(".12".into());
+        lobby.focus = Some(".12".into());
         let game = lobby.focused().unwrap();
         assert_eq!(views.get(game), GameView::default(), "a different match ({change}) starts at live");
         assert!(game.observers.is_empty());
@@ -433,7 +433,7 @@ fn synchro_view_uses_only_the_selected_match_halves() {
     );
 
     lobby.show_view(ViewMode::Synchro);
-    lobby.focus_on(".20.0".into());
+    lobby.focus = Some(".20.0".into());
     assert_eq!(lobby.view, ViewMode::Synchro, "changing the selected half keeps the pair view");
     unwatch(&mut lobby, ".20.0");
     assert_eq!(lobby.view, ViewMode::Focus, "closing the selected pair returns to focus view");
@@ -512,7 +512,7 @@ fn rejoin_keeps_observers_and_kibitz_and_clamps_the_cursor() {
     assert_eq!(lobby.focused().and_then(|g| views.get(g).cursor), Some(2));
     views.get_mut(lobby.focused().unwrap()).flipped = true;
     views.get_mut(lobby.focused().unwrap()).hints = false;
-    lobby.focus_on(".13".into());
+    lobby.focus = Some(".13".into());
     let undone = GameRecord::parse(&SPEC_JOIN.replace("W[c5/-1.23/4.5]", "").replace("12:00:00", "12:00:10")).unwrap();
     lobby.apply(OsMsg::Join { id: ".12".into(), record: Box::new(undone) }, now);
     let g = &lobby.games[".12"];
@@ -524,7 +524,7 @@ fn rejoin_keeps_observers_and_kibitz_and_clamps_the_cursor() {
         GameView { cursor: None, flipped: true, hints: false },
         "an unfocused board also clamps after an undo"
     );
-    lobby.focus_on(".12".into());
+    lobby.focus = Some(".12".into());
     assert_eq!(
         lobby.focused().and_then(|g| views.get(g).cursor),
         None,

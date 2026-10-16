@@ -258,9 +258,9 @@ impl Viewer {
                             .py_2()
                             .rounded(px(ui::RADIUS_ROW))
                             .border_1()
-                            .border_color(ui::error())
+                            .border_color(ui::live())
                             .text_sm()
-                            .text_color(ui::error())
+                            .text_color(ui::live())
                             .child(e),
                     )
                 }),

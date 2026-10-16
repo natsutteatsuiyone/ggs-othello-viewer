@@ -4,7 +4,7 @@ use std::sync::{
     Arc, Mutex,
     mpsc::{self, SyncSender, TrySendError},
 };
-use std::thread::{self, JoinHandle};
+use std::thread;
 use std::time::{Duration, Instant, SystemTime};
 
 /// Where a chat line belongs: a channel such as `.chat`, a private conversation with one user, or the
@@ -103,6 +103,10 @@ impl Chat {
         if !matches!(key, ChatKey::User(_)) {
             return;
         }
+        self.drop_conversation(key);
+    }
+
+    fn drop_conversation(&mut self, key: &ChatKey) {
         self.conversations.retain(|c| &c.key != key);
         if &self.selected == key {
             self.open(ChatKey::Channel(DEFAULT_CHANNEL.into()));
@@ -131,10 +135,7 @@ impl Chat {
             if join {
                 self.conversation(&key);
             } else {
-                self.conversations.retain(|c| c.key != key);
-                if self.selected == key {
-                    self.open(ChatKey::Channel(DEFAULT_CHANNEL.into()));
-                }
+                self.drop_conversation(&key);
             }
         }
     }
@@ -197,26 +198,24 @@ struct LogEntry {
     lines: Vec<String>,
 }
 
-#[derive(Debug, Default)]
-struct LogFailures {
-    pending: Mutex<Option<(usize, String)>>,
-}
+/// Lines lost so far and the last error.
+type LogFailures = Mutex<Option<(usize, String)>>;
 
-impl LogFailures {
-    fn record(&self, lost_lines: usize, error: impl AsRef<str>) {
-        // Construct the bounded detail before taking the lock; this lock never covers database work.
-        let error: String = error.as_ref().chars().take(240).collect();
-        let mut pending = self.pending.lock().unwrap_or_else(|e| e.into_inner());
-        let count = pending.as_ref().map_or(0, |(count, _)| *count).saturating_add(lost_lines);
-        *pending = Some((count, error));
-    }
+fn record_failure(failures: &LogFailures, lost_lines: usize, error: impl AsRef<str>) {
+    // Construct the bounded detail before taking the lock; this lock never covers database work.
+    let error: String = error.as_ref().chars().take(240).collect();
+    let mut pending = failures.lock().unwrap_or_else(|e| e.into_inner());
+    let count = pending.as_ref().map_or(0, |(count, _)| *count).saturating_add(lost_lines);
+    *pending = Some((count, error));
 }
 
 #[derive(Debug)]
 struct ChatLog {
     queue: Option<SyncSender<LogEntry>>,
     failures: Arc<LogFailures>,
-    worker: Option<JoinHandle<Connection>>,
+    // Outside tests the handle is dropped, not joined: a locked database cannot hold the UI open at shutdown.
+    #[cfg(test)]
+    worker: Option<thread::JoinHandle<Connection>>,
     last_warning: Option<Instant>,
 }
 
@@ -230,7 +229,7 @@ impl ChatLog {
                 // SQLite's busy timeout from `store::open` waits here; dropping the UI never joins this thread.
                 while let Ok(entry) = incoming.recv() {
                     if let Err(error) = persist_chat(&mut db, &server, &login, &entry) {
-                        failures.record(entry.lines.len(), error.to_string());
+                        record_failure(&failures, entry.lines.len(), error.to_string());
                     }
                 }
                 db
@@ -239,11 +238,17 @@ impl ChatLog {
         let worker = match result {
             Ok(worker) => Some(worker),
             Err(error) => {
-                failures.record(0, format!("chat log writer could not start: {error}"));
+                record_failure(&failures, 0, format!("chat log writer could not start: {error}"));
                 None
             }
         };
-        Self { queue: worker.as_ref().map(|_| queue), failures, worker, last_warning: None }
+        Self {
+            queue: worker.as_ref().map(|_| queue),
+            failures,
+            #[cfg(test)]
+            worker,
+            last_warning: None,
+        }
     }
 
     fn enqueue(&self, entry: LogEntry) {
@@ -253,9 +258,9 @@ impl ChatLog {
         let lost_lines = entry.lines.len();
         match self.queue.as_ref().map(|queue| queue.try_send(entry)) {
             Some(Ok(())) => {}
-            Some(Err(TrySendError::Full(_))) => self.failures.record(lost_lines, "chat log queue is full"),
+            Some(Err(TrySendError::Full(_))) => record_failure(&self.failures, lost_lines, "chat log queue is full"),
             Some(Err(TrySendError::Disconnected(_))) | None => {
-                self.failures.record(lost_lines, "chat log writer is unavailable")
+                record_failure(&self.failures, lost_lines, "chat log writer is unavailable")
             }
         }
     }
@@ -265,27 +270,15 @@ impl ChatLog {
             return None;
         }
         // A warning tick must not wait behind even the short failure-summary lock.
-        let pending = self.failures.pending.try_lock().ok()?.take()?;
+        let pending = self.failures.try_lock().ok()?.take()?;
         self.last_warning = Some(now);
         Some(format!("chat log could not be saved ({} line(s) lost; last error: {})", pending.0, pending.1))
     }
 
-    fn close(&mut self) {
-        self.queue.take(); // The receiver drains accepted entries, then exits.
-    }
-
     #[cfg(test)]
     fn finish(mut self) -> Connection {
-        self.close();
+        self.queue.take(); // The receiver drains accepted entries, then exits.
         finish_worker(self.worker.take().expect("writer started"))
-    }
-}
-
-impl Drop for ChatLog {
-    fn drop(&mut self) {
-        self.close();
-        // Dropping JoinHandle detaches: a locked database cannot hold the UI open at shutdown.
-        self.worker.take();
     }
 }
 
@@ -304,7 +297,7 @@ fn persist_chat(db: &mut Connection, server: &str, login: &str, entry: &LogEntry
 }
 
 #[cfg(test)]
-fn finish_worker(worker: JoinHandle<Connection>) -> Connection {
+fn finish_worker(worker: thread::JoinHandle<Connection>) -> Connection {
     // Never let a worker regression hang the test runner at join(). The helper thread can
     // wait for the join, while the test has a generous, real completion deadline.
     let (done, result) = mpsc::sync_channel(1);
@@ -554,7 +547,7 @@ mod tests {
         );
         chat.add(ChatKey::User("bob".into()), line("bob", "saved next"), SystemTime::now());
         let mut log = chat.log.take().unwrap();
-        log.close();
+        log.queue.take();
         let db = finish_worker(log.worker.take().unwrap());
         let rows = db
             .prepare("SELECT line FROM chat ORDER BY id")
@@ -573,9 +566,9 @@ mod tests {
         let warning = chat.take_log_warning(now).unwrap();
         assert!(warning.contains("3 line(s) lost") && warning.contains("test save failure"), "{warning}");
         let failures = &chat.log.as_ref().unwrap().failures;
-        failures.record(2, "first repeated failure");
+        record_failure(failures, 2, "first repeated failure");
         assert!(chat.take_log_warning(now + Duration::from_secs(1)).is_none());
-        chat.log.as_ref().unwrap().failures.record(4, "last repeated failure");
+        record_failure(&chat.log.as_ref().unwrap().failures, 4, "last repeated failure");
         let warning = chat.take_log_warning(now + LOG_WARNING_INTERVAL).unwrap();
         assert!(warning.contains("6 line(s) lost") && warning.contains("last repeated failure"), "{warning}");
         assert!(chat.take_log_warning(now + LOG_WARNING_INTERVAL * 2).is_none(), "reported failures are consumed");

@@ -430,7 +430,7 @@ pub(super) fn render_synchro(lobby: &Lobby, room: Size<f32>, pane: &BoardPane, c
         |v| &mut v.board,
         |v, game, cx| {
             v.with_lobby(cx, |l| {
-                l.focus_on(game.to_string());
+                l.focus = Some(game.to_string());
                 l.show_view(ViewMode::Focus)
             });
         },
@@ -653,4 +653,27 @@ pub(super) fn render_moves<T: 'static>(
         .font_family(ui::MONO)
         .text_xs()
         .children(rows)
+}
+
+/// The Focus and Synchro tabs; `prefix` names their debug selectors, as in `{prefix}-focus-tab`.
+pub(super) fn view_tabs<T: 'static>(
+    id: &'static str,
+    prefix: &'static str,
+    mode: ViewMode,
+    cx: &Context<T>,
+    pick: fn(&mut T, ViewMode, &mut Context<T>),
+) -> TabBar {
+    let views = [(ViewMode::Focus, "Focus", "focus"), (ViewMode::Synchro, "Synchro", "synchro")];
+    TabBar::new(id)
+        .segmented()
+        .small()
+        .selected_index(views.iter().position(|(m, ..)| *m == mode).unwrap_or(0))
+        .on_click(cx.listener(move |this, ix: &usize, _, cx| {
+            if let Some(&(mode, ..)) = views.get(*ix) {
+                pick(this, mode, cx);
+            }
+        }))
+        .children(views.into_iter().map(move |(_, label, name)| {
+            Tab::new().cursor_pointer().label(label).debug_selector(move || format!("{prefix}-{name}-tab"))
+        }))
 }

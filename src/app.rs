@@ -761,7 +761,7 @@ impl Viewer {
         if !self.allow_read(key) {
             return loaded;
         }
-        self.with_lobby(cx, |_| vec![command]);
+        self.send(command);
         true
     }
 
@@ -798,10 +798,7 @@ impl Viewer {
                 ui::pending(),
             ),
         };
-        let me = match &self.session.screen {
-            Screen::Connected(c) => Some(c.chat.me().to_string()),
-            _ => None,
-        };
+        let me = self.session.connected().map(|(c, _)| c.chat.me().to_string());
         div()
             .h(px(ui::TOPBAR_H))
             .flex_none()
@@ -952,21 +949,10 @@ impl Viewer {
             .into_any_element(),
         };
         let show_view_tabs = self.sheet.is_none() && lobby.has_synchro_focus();
-        let views = [(ViewMode::Focus, "Focus", "view-focus-tab"), (ViewMode::Synchro, "Synchro", "view-synchro-tab")];
-        let selected = views.iter().position(|(mode, ..)| *mode == lobby.view).unwrap_or(0);
-        let view_tabs = TabBar::new("view")
-            .segmented()
-            .small()
-            .selected_index(selected)
-            .on_click(cx.listener(move |this, ix: &usize, _, cx| {
-                if let Some(&(mode, ..)) = views.get(*ix) {
-                    this.sheet = None;
-                    this.with_lobby(cx, |l| l.show_view(mode));
-                }
-            }))
-            .children(views.into_iter().map(|(_, label, selector)| {
-                Tab::new().cursor_pointer().label(label).debug_selector(move || selector.into())
-            }));
+        let view_tabs = view_tabs("view", "view", lobby.view, cx, |this, mode, cx| {
+            this.sheet = None;
+            this.with_lobby(cx, |l| l.show_view(mode));
+        });
         div().id("connected").relative().size_full().flex().child(
             h_resizable(if show_details { "focus-layout" } else { "plain-layout" })
                 .with_state(layout)
@@ -1072,7 +1058,7 @@ impl Viewer {
             ui::button(("half", i), short_id(&g.id).to_string(), g.id == game.id, true).on_click(cx.listener(
                 move |this, _: &ClickEvent, _, cx| {
                     if let Some(l) = this.session.lobby_mut() {
-                        l.focus_on(id.clone());
+                        l.focus = Some(id.clone());
                         cx.notify();
                     }
                 },

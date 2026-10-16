@@ -180,10 +180,9 @@ pub fn match_of(game_id: &str) -> &str {
 
 /// Records a subscription confirmed by a Join or committed at the send boundary.
 fn add_watch(watched: &mut Vec<String>, match_id: &str) {
-    if watched.iter().any(|w| w == match_id) {
-        return;
+    if !watched.iter().any(|w| w == match_id) {
+        watched.push(match_id.to_string());
     }
-    watched.push(match_id.to_string());
 }
 
 /// What a user's page asks for: profile, match settings and archived games.
@@ -206,25 +205,20 @@ fn pending(asked: &VecDeque<ListRequest>, t: RatingType, now: Instant) -> bool {
 
 /// The words after `tell /os` in a line, or `None` for any other line.
 fn os_words(line: &str) -> Option<Vec<&str>> {
-    let rest = line.trim_matches(is_space).strip_prefix("tell")?;
-    if !rest.starts_with(is_space) {
+    let rest = line.trim_matches(net::is_space).strip_prefix("tell")?;
+    if !rest.starts_with(net::is_space) {
         return None;
     }
     // `tell` ends the recipient at the first plain space (Central EXE_Client.C `tell`): `/os\tlook` names no one.
-    let (to, message) = rest.trim_start_matches(is_space).split_once(' ')?;
-    (to == OS).then(|| message.split(is_space).filter(|w| !w.is_empty()).collect())
-}
-
-/// GGS splits on C `isspace`; `split_whitespace` would also split on U+00A0 or U+3000.
-fn is_space(c: char) -> bool {
-    matches!(c, ' ' | '\t' | '\n' | '\x0B' | '\x0C' | '\r')
+    let (to, message) = rest.trim_start_matches(net::is_space).split_once(' ')?;
+    (to == OS).then(|| message.split(net::is_space).filter(|w| !w.is_empty()).collect())
 }
 
 /// Whether the server runs `line` as `tell`, which it never looks up as an alias (EXE_Client.C `shell_expand`).
 fn is_tell(line: &str) -> bool {
-    line.trim_start_matches(is_space)
+    line.trim_start_matches(net::is_space)
         .strip_prefix("tell")
-        .is_some_and(|rest| rest.is_empty() || rest.starts_with(is_space))
+        .is_some_and(|rest| rest.is_empty() || rest.starts_with(net::is_space))
 }
 
 fn insert_in_order<T>(queue: &mut VecDeque<T>, item: T, seq: impl Fn(&T) -> u64) {
@@ -467,7 +461,7 @@ impl Lobby {
         } else {
             id
         };
-        self.focus_on(focus.to_string());
+        self.focus = Some(focus.to_string());
     }
 
     /// Shows archived match `key` (`.73`) and prepares a lookup unless it is loaded or pending.
@@ -685,10 +679,6 @@ impl Lobby {
         self.games.get(self.focus.as_deref()?)
     }
 
-    pub fn focus_on(&mut self, game_id: String) {
-        self.focus = Some(game_id);
-    }
-
     /// Games a match-level notice applies to: the id itself and its synchro halves.
     fn fan_out(&mut self, id: &str) -> Vec<&mut Game> {
         self.games
@@ -881,12 +871,10 @@ impl Lobby {
         match Game::from_record(id.clone(), record, now) {
             Ok(mut g) => {
                 self.stale.remove(&id);
-                if let Some(old) = self.games.remove(&id).filter(|old| old.same_match(&g)) {
+                let old = self.games.remove(&id).filter(|old| old.same_match(&g));
+                if let Some(old) = old.or_else(|| self.restoring_games.remove(&id).filter(|old| old.same_match(&g))) {
                     g.text = old.text;
                     g.key = old.key;
-                } else if let Some(old) = self.restoring_games.remove(&id).filter(|old| old.same_match(&g)) {
-                    g.key = old.key;
-                    g.text = old.text;
                 }
                 let m = match_of(&id).to_string();
                 g.observers = self.match_observers.get(&m).cloned().unwrap_or_default();
@@ -906,7 +894,7 @@ impl Lobby {
                     };
                 self.games.insert(id.clone(), g);
                 if waiting {
-                    self.focus_on(id);
+                    self.focus = Some(id);
                 }
             }
             Err(e) => notes.push(format!("join {id}: {e}")),
