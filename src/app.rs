@@ -1204,7 +1204,8 @@ fn jitter() -> Duration {
 
 fn chat_document(s: &Said) -> String {
     let time = chrono::DateTime::<chrono::Local>::from(s.at).format("%H:%M").to_string();
-    format!("**{}** {time}\n\n{}\n\n", literal_markdown(&s.line.from), literal_markdown(&s.line.lines.join("\n")))
+    // A level-6 heading is small and muted, with more room above it than below, so each message stands apart.
+    format!("###### {} {time}\n\n{}\n\n", literal_markdown(&s.line.from), literal_markdown(&s.line.lines.join("\n")))
 }
 
 /// Protocol text remains literal, including markup characters and leading whitespace.
