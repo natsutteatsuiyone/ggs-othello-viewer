@@ -737,7 +737,7 @@ impl Viewer {
         if let Some(game) = l.focused() {
             let at = self.board.views.get(game).cursor;
             self.board.moves_scroll.scroll_to_item(record_row(game, at));
-            scroll_search_logs(&self.board.search_scroll, &l.searches, game, at);
+            scroll_search_logs(&self.board.search_scroll, &l.searches, game, at, self.board.views.get(game).flipped);
         }
         cx.notify();
     }
@@ -1404,7 +1404,7 @@ impl Viewer {
         &self,
         searches: &crate::search::Searches,
         games: &[Option<&Game>],
-        scroll: &[ScrollHandle; 2],
+        scroll: &ScrollHandle,
         room: Size<f32>,
     ) -> (Size<f32>, Option<Div>) {
         let Some(game) = games.iter().flatten().next() else { return (room, None) };

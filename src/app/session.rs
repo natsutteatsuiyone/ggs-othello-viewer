@@ -139,7 +139,7 @@ impl Viewer {
     fn follow_search_logs(&self) {
         let live = self.session.lobby.focused().is_some_and(|g| self.board.views.get(g).cursor.is_none());
         if live {
-            self.board.search_scroll.iter().for_each(ScrollHandle::scroll_to_bottom);
+            self.board.search_scroll.scroll_to_bottom();
         }
     }
 

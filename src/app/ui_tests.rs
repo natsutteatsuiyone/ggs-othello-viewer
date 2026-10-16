@@ -1,6 +1,6 @@
 use super::{Conn, Launch, Rail, Screen, Viewer, note};
 use crate::othello::Color;
-use crate::search::Entry;
+use crate::search::{Entry, Row};
 use crate::{
     chat::{Chat, ChatKey, ChatLine, DEFAULT_CHANNEL},
     ggf::{GameRecord, tests::SPEC_JOIN},
@@ -3871,41 +3871,44 @@ fn the_servers_move_announcements_divide_a_players_log_on_both_synchro_boards(cx
     let button = cx.debug_bounds("search-follow").unwrap();
     cx.simulate_click(button.center(), Default::default());
     settle(cx);
-    let (player, color, ply) = cx.update(|_, cx| {
+    let (player, ply) = cx.update(|_, cx| {
         viewer.update(cx, |v, cx| {
+            v.on_message(vec![".alice alice: alice thinks".into()], cx);
+            v.on_message(vec![".bob bob: bob waits".into()], cx);
             let Some((_, lobby)) = v.session.connected_mut() else { unreachable!() };
             let token = crate::othello::MoveToken::parse("e6//3").unwrap();
             lobby.apply(OsMsg::Update { id: ".20.1".into(), token }, Instant::now());
             let g = &lobby.games[".20.1"];
             let m = g.moves().last().unwrap();
             let player = if m.color == Color::Black { g.black.name.clone() } else { g.white.name.clone() };
-            let color = if lobby.games[".20.0"].black.name == player { Color::Black } else { Color::White };
             let ply = g.moves().len();
             v.on_message(vec![format!(".{player} {player}: after")], cx);
-            (player, color, ply)
+            (player, ply)
         })
     });
     settle(cx);
     assert!(
         cx.debug_bounds(format!("search-move-{player}-.20.1-{ply}").leak()).is_some(),
-        "the move on the other board divides the log of the board shown"
+        "the move on the other board divides the logs of the board shown"
     );
     cx.update(|_, cx| {
         let v = viewer.read(cx);
         let lobby = &v.session.lobby;
+        let shown = &lobby.games[".20.0"];
+        let players = [shown.black.name.as_str(), shown.white.name.as_str()];
+        assert_eq!(players, ["alice", "bob"]);
+        let rows = lobby.searches.rows(players);
+        let side = usize::from(player == "bob");
+        let mut after = [vec![], vec![]];
+        after[side].push("after");
         assert_eq!(
-            lobby.searches.timeline(&player).cloned().collect::<Vec<_>>(),
+            rows,
             [
-                Entry::Move { game: ".20.1".into(), ply, mv: crate::othello::Move::parse("e6").unwrap() },
-                Entry::Line("after".into()),
-            ]
-        );
-        let shown = &lobby.games[".20.1"];
-        let other = if color == Color::Black { Color::White } else { Color::Black };
-        assert_eq!(
-            super::board::search_anchor(&lobby.searches, shown, ply, other),
-            Some(0),
-            "browsing scrolls to the rule"
+                Row::Lines([vec!["alice thinks"], vec!["bob waits"]]),
+                Row::Move { side, game: ".20.1", ply, mv: crate::othello::Move::parse("e6").unwrap() },
+                Row::Lines(after),
+            ],
+            "what both sent between the same moves shares a row"
         );
     });
 }
@@ -3929,7 +3932,6 @@ fn a_match_window_shows_the_engine_logs_under_its_board(cx: &mut TestAppContext)
     settle(&mut child);
     let board = child.debug_bounds("focus-board").unwrap();
     assert!(child.debug_bounds("search").is_some_and(|s| s.top() > board.bottom()), "the boxes sit under the board");
-    assert!(child.debug_bounds("search-bob").is_some());
 }
 
 #[gpui_kit::test]

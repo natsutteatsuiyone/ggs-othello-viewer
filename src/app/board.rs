@@ -1,5 +1,5 @@
 use super::*;
-use crate::search::{Entry, Searches};
+use crate::search::{Row, Searches, row_of};
 
 #[derive(Default)]
 pub(super) struct BoardPane {
@@ -7,8 +7,8 @@ pub(super) struct BoardPane {
     pub focus_fit: Fit,
     pub synchro_fit: [Fit; 2],
     pub moves_scroll: ScrollHandle,
-    /// The engine log boxes under the Focus board, black's player first.
-    pub search_scroll: [ScrollHandle; 2],
+    /// The engine logs under the board.
+    pub search_scroll: ScrollHandle,
 }
 
 /// The Focus column and its board as last laid out. Everything in the column but the board keeps
@@ -363,110 +363,109 @@ pub(super) fn player_panel(game: &Game, at: At, flipped: bool, now: Instant, wid
         .child(cell(right))
 }
 
-/// Where the box for `color`'s player scrolls to while browsing position `k`: the server's announcement of
-/// that player's last move up to `k`.
-pub(super) fn search_anchor(searches: &Searches, game: &Game, k: usize, color: Color) -> Option<usize> {
-    let name = if color == Color::Black { &game.black.name } else { &game.white.name };
-    let ply = game.moves()[..k].iter().rposition(|m| m.color == color)? + 1;
-    searches.position(name, &game.id, ply)
-}
-
-/// The log boxes' scrolling height in a column `column_h` tall, and all the height they take: their name row,
+/// The logs' scrolling height in a column `column_h` tall, and all the height they take: their name row,
 /// padding and the gap above them. They take a share of the column, and the boards the rest.
 pub(super) fn engine_logs_h(column_h: f32) -> (f32, f32) {
     let h = (column_h * 0.3).clamp(140., 420.);
-    (h, h + 52.)
+    (h, h + 64.)
 }
 
-/// Scrolls the log boxes to what position `at` shows: live, the newest entries; browsing, each player's last
-/// move up to `at`.
-pub(super) fn scroll_search_logs(scroll: &[ScrollHandle; 2], searches: &Searches, game: &Game, at: At) {
-    for (color, scroll) in [Color::Black, Color::White].into_iter().zip(scroll) {
-        match at {
-            None => scroll.scroll_to_bottom(),
-            Some(k) => {
-                if let Some(i) = search_anchor(searches, game, k, color) {
-                    scroll.scroll_to_item(i);
-                }
+/// The players as the logs list them, left first: as the player panels show them.
+fn log_players(game: &Game, flipped: bool) -> [&str; 2] {
+    let (b, w) = (game.black.name.as_str(), game.white.name.as_str());
+    if flipped { [w, b] } else { [b, w] }
+}
+
+/// Scrolls the logs to what position `at` shows: live, the newest rows; browsing, the server's announcement
+/// of the move that led to `at`.
+pub(super) fn scroll_search_logs(scroll: &ScrollHandle, searches: &Searches, game: &Game, at: At, flipped: bool) {
+    match at {
+        None => scroll.scroll_to_bottom(),
+        Some(k) => {
+            if let Some(i) = row_of(&searches.rows(log_players(game, flipped)), &game.id, k) {
+                scroll.scroll_to_item(i);
             }
         }
     }
 }
 
-/// One box per player, under the player panels' columns: what the player's engine sent to its log channel,
-/// as it was sent, in arrival order, with a rule where the server announced each of the player's moves. A
-/// player's engine logs both boards of a synchro match to one channel, so a box follows the player rather
-/// than a color. Browsing, the rule of the player's last move up to `at` is marked and scrolled to. Every
-/// box keeps `height`, so a log arriving never resizes the board.
+/// The room between the logs' two columns, the center line in its middle.
+const LOG_GUTTER: f32 = 32.;
+
+/// The two players' engine logs under the board, one column each under their player panels: what each sent
+/// to its log channel, as it was sent, in arrival order. A rule across both columns marks each move the
+/// server announced, so what the two players sent between the same two moves shares a row. A player's
+/// engine logs both boards of a synchro match to one channel, so the rules of both boards are there.
+/// Browsing, the rule of the move that led to `at` is marked and scrolled to. The logs keep `height`, so a
+/// line arriving never resizes the board.
 pub(super) fn engine_logs(
     searches: &Searches,
-    scroll: &[ScrollHandle; 2],
+    scroll: &ScrollHandle,
     game: &Game,
     at: At,
     flipped: bool,
     width: f32,
     height: f32,
 ) -> Div {
-    let cell = |color: Color| {
-        let name = if color == Color::Black { &game.black.name } else { &game.white.name };
-        let anchor = at.and_then(|k| search_anchor(searches, game, k, color));
-        let entries: Vec<&Entry> = searches.timeline(name).collect();
-        let empty = entries.is_empty();
-        let rows = entries.into_iter().enumerate().map(|(i, entry)| match entry {
-            Entry::Line(text) => div().flex_none().whitespace_normal().child(text.clone()),
-            Entry::Move { game: id, ply, mv } => {
-                let selector = format!("search-move-{name}-{id}-{ply}");
-                let ink = if anchor == Some(i) { ui::accent() } else { ui::muted() };
-                let rule = || div().flex_1().h(px(1.)).bg(ui::line());
-                div()
-                    .debug_selector(move || selector.clone())
-                    .flex_none()
-                    .h(px(20.))
-                    .my_0p5()
-                    .h_flex()
-                    .gap_2()
-                    .text_color(ink)
-                    .child(rule())
-                    .child(format!("{id} · {ply} {mv}"))
-                    .child(rule())
-            }
-        });
-        div()
-            .debug_selector({
-                let name = name.clone();
-                move || format!("search-{name}")
-            })
-            .flex_1()
-            .min_w_0()
-            .v_flex()
-            .gap_1()
-            .px_3()
-            .py_2()
-            .rounded(px(ui::RADIUS))
-            .bg(ui::surface())
-            .text_sm()
-            .child(div().h(px(20.)).truncate().font_weight(FontWeight::SEMIBOLD).child(name.clone()))
-            .child(
-                div()
-                    .id(SharedString::from(format!("search-body-{name}")))
-                    .track_scroll(&scroll[if color == Color::Black { 0 } else { 1 }])
-                    .h(px(height))
-                    .overflow_y_scroll()
-                    .v_flex()
-                    .font_family(ui::MONO)
-                    .text_xs()
-                    .when(empty, |d| d.child(div().text_color(ui::muted()).child("No log yet.")))
-                    .children(rows),
-            )
-    };
-    let (left, right) = if flipped { (Color::White, Color::Black) } else { (Color::Black, Color::White) };
+    let players = log_players(game, flipped);
+    let rows = searches.rows(players);
+    let anchor = at.and_then(|k| row_of(&rows, &game.id, k));
+    let empty = rows.is_empty();
+    let column = || div().flex_1().min_w_0().v_flex();
+    let rows = rows.into_iter().enumerate().map(|(i, row)| match row {
+        Row::Lines(columns) => {
+            div().flex_none().py_1().h_flex().items_start().gap(px(LOG_GUTTER)).children(columns.map(|lines| {
+                column().gap_0p5().children(lines.into_iter().map(|l| div().whitespace_normal().child(l.to_string())))
+            }))
+        }
+        Row::Move { side, game: id, ply, mv } => {
+            let selector = format!("search-move-{}-{id}-{ply}", players[side]);
+            let ink = if anchor == Some(i) { ui::accent() } else { ui::muted() };
+            let label = || div().flex_none().px_2().child(format!("{id} · {ply} {mv}"));
+            let rule = || div().flex_1().h(px(1.)).bg(if anchor == Some(i) { ui::accent() } else { ui::line() });
+            // The label sits in the mover's column; the rule runs across both.
+            div()
+                .debug_selector(move || selector.clone())
+                .flex_none()
+                .h(px(20.))
+                .my_1()
+                .h_flex()
+                .text_color(ink)
+                .child(rule())
+                .when(side == 0, |d| d.child(label()))
+                .child(rule())
+                .child(rule())
+                .when(side == 1, |d| d.child(label()))
+                .child(rule())
+        }
+    });
+    let name = |n: &str| column().h(px(20.)).truncate().font_weight(FontWeight::SEMIBOLD).child(n.to_string());
     div()
         .debug_selector(|| "search".into())
         .w(px(width))
-        .flex()
-        .gap(px(ui::PANEL_GAP))
-        .child(cell(left))
-        .child(cell(right))
+        .v_flex()
+        .gap_2()
+        .px_4()
+        .py_3()
+        .rounded(px(ui::RADIUS))
+        .bg(ui::surface())
+        .text_sm()
+        .relative()
+        // A faint line between the columns, from the names to the bottom, unbroken by the rules.
+        .child(div().absolute().top_3().bottom_3().left(px(width / 2. - 0.5)).w(px(1.)).bg(ui::line()))
+        .child(div().h_flex().gap(px(LOG_GUTTER)).child(name(players[0])).child(name(players[1])))
+        .child(
+            div()
+                .id("search-body")
+                .track_scroll(scroll)
+                .h(px(height))
+                .overflow_y_scroll()
+                .v_flex()
+                .font_family(ui::MONO)
+                .text_xs()
+                .when(empty, |d| d.child(div().text_color(ui::muted()).child("No log yet.")))
+                .children(rows),
+        )
 }
 
 pub(super) fn under_board<T: 'static>(

@@ -25,12 +25,26 @@ pub fn is_log(channel: &str, from: &str) -> bool {
     self::channel(from) == channel
 }
 
-/// Each login's log lines and moves, oldest first.
+/// Each login's log lines and moves, oldest first, numbered in the order they came across logins.
 #[derive(Default, Debug)]
 pub struct Searches {
-    entries: BTreeMap<String, VecDeque<Entry>>,
-    /// Entries added so far, so a view can tell something new arrived.
+    entries: BTreeMap<String, VecDeque<(u64, Entry)>>,
+    /// Entries added so far: the next entry's number, and how a view tells something new arrived.
     added: u64,
+}
+
+/// A row of two players' logs side by side.
+#[derive(Clone, PartialEq, Debug)]
+pub enum Row<'a> {
+    /// A move the server announced `players[side]` played.
+    Move { side: usize, game: &'a str, ply: usize, mv: Move },
+    /// What each player sent between two moves.
+    Lines([Vec<&'a str>; 2]),
+}
+
+/// Where the `ply`th move of `game` falls among `rows`.
+pub fn row_of(rows: &[Row], game: &str, ply: usize) -> Option<usize> {
+    rows.iter().position(|r| matches!(r, Row::Move { game: g, ply: p, .. } if *g == game && *p == ply))
 }
 
 /// An engine logs every move of every game it plays; older entries are dropped past this many.
@@ -46,26 +60,50 @@ impl Searches {
     }
 
     fn push(&mut self, login: &str, entry: Entry) {
-        self.added += 1;
         let entries = self.entries.entry(login.to_string()).or_default();
-        entries.push_back(entry);
+        entries.push_back((self.added, entry));
+        self.added += 1;
         if entries.len() > KEEP {
             entries.pop_front();
         }
     }
 
     /// `login`'s entries, oldest first.
+    #[cfg(test)]
     pub fn timeline(&self, login: &str) -> impl Iterator<Item = &Entry> {
-        self.entries.get(login).into_iter().flatten()
+        self.entries.get(login).into_iter().flatten().map(|(_, e)| e)
+    }
+
+    /// Two players' logs in the order they came: each announced move is a row across both, and what the
+    /// players sent between two moves shares the row between them.
+    pub fn rows<'a>(&'a self, players: [&str; 2]) -> Vec<Row<'a>> {
+        let mut merged: Vec<(u64, usize, &Entry)> = Vec::new();
+        for (side, login) in players.iter().enumerate() {
+            if side == 1 && players[0] == players[1] {
+                break;
+            }
+            merged.extend(self.entries.get(*login).into_iter().flatten().map(|(n, e)| (*n, side, e)));
+        }
+        merged.sort_by_key(|(n, ..)| *n);
+        let mut rows = Vec::new();
+        for (_, side, entry) in merged {
+            match entry {
+                Entry::Move { game, ply, mv } => rows.push(Row::Move { side, game, ply: *ply, mv: *mv }),
+                Entry::Line(text) => {
+                    if !matches!(rows.last(), Some(Row::Lines(_))) {
+                        rows.push(Row::Lines([Vec::new(), Vec::new()]));
+                    }
+                    if let Some(Row::Lines(columns)) = rows.last_mut() {
+                        columns[side].push(text.as_str());
+                    }
+                }
+            }
+        }
+        rows
     }
 
     pub fn added(&self) -> u64 {
         self.added
-    }
-
-    /// Where the `ply`th move of `game` falls in `login`'s timeline.
-    pub fn position(&self, login: &str, game: &str, ply: usize) -> Option<usize> {
-        self.timeline(login).position(|e| matches!(e, Entry::Move { game: g, ply: p, .. } if g == game && *p == ply))
     }
 }
 
@@ -97,13 +135,37 @@ mod tests {
             ],
             "lines exactly as sent"
         );
-        assert_eq!(s.position("e", ".3.0", 17), Some(1));
-        assert_eq!(s.position("e", ".3.1", 17), None);
         assert_eq!(s.timeline("other").count(), 0);
         for _ in 0..KEEP {
             s.add_line("e", "x");
         }
         assert_eq!(s.timeline("e").count(), KEEP);
-        assert_eq!(s.position("e", ".3.0", 17), None, "the oldest entries go first");
+        assert!(!s.timeline("e").any(|e| matches!(e, Entry::Move { .. })), "the oldest entries go first");
+    }
+
+    #[test]
+    fn two_players_share_rows_between_the_moves() {
+        let mut s = Searches::default();
+        let mv = |m: &str| Move::parse(m).unwrap();
+        s.add_line("a", "a thinks");
+        s.add_line("b", "b waits");
+        s.add_line("a", "a decides");
+        s.add_move("a", ".3.0", 17, mv("g5"));
+        s.add_move("b", ".3.1", 17, mv("c2"));
+        s.add_line("b", "b thinks");
+        s.add_line("x", "someone else");
+        let rows = s.rows(["a", "b"]);
+        assert_eq!(
+            rows,
+            [
+                Row::Lines([vec!["a thinks", "a decides"], vec!["b waits"]]),
+                Row::Move { side: 0, game: ".3.0", ply: 17, mv: mv("g5") },
+                Row::Move { side: 1, game: ".3.1", ply: 17, mv: mv("c2") },
+                Row::Lines([vec![], vec!["b thinks"]]),
+            ]
+        );
+        assert_eq!(row_of(&rows, ".3.1", 17), Some(2));
+        assert_eq!(row_of(&rows, ".3.1", 18), None);
+        assert_eq!(s.rows(["a", "a"]).len(), 2, "one login playing itself is listed once");
     }
 }

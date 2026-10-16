@@ -30,7 +30,7 @@ impl MatchWindow {
                     && let Some(game) = this.state.game(lobby, &this.state.selected_id())
                     && this.board.views.get(game).cursor.is_none()
                 {
-                    scroll_search_logs(&this.board.search_scroll, &lobby.searches, game, None);
+                    scroll_search_logs(&this.board.search_scroll, &lobby.searches, game, None, false);
                 }
             }
             cx.notify();
@@ -74,7 +74,8 @@ impl MatchWindow {
             self.board.views.navigate(game, nav);
             let at = self.board.views.get(game).cursor;
             self.board.moves_scroll.scroll_to_item(record_row(game, at));
-            scroll_search_logs(&self.board.search_scroll, &lobby.searches, game, at);
+            let flipped = self.board.views.get(game).flipped;
+            scroll_search_logs(&self.board.search_scroll, &lobby.searches, game, at, flipped);
         }
         cx.notify();
     }
