@@ -410,7 +410,6 @@ pub(super) fn engine_logs(
     let players = log_players(game, flipped);
     let rows = searches.rows(players);
     let anchor = at.and_then(|k| row_of(&rows, &game.id, k));
-    let empty = rows.is_empty();
     let column = || div().flex_1().min_w_0().v_flex();
     let rows = rows.into_iter().enumerate().map(|(i, row)| match row {
         Row::Lines(columns) => {
@@ -463,7 +462,6 @@ pub(super) fn engine_logs(
                 .v_flex()
                 .font_family(ui::MONO)
                 .text_xs()
-                .when(empty, |d| d.child(div().text_color(ui::muted()).child("No log yet.")))
                 .children(rows),
         )
 }
