@@ -573,7 +573,10 @@ pub(super) fn rank_row(r: &Rank, cx: &mut Context<Viewer>) -> Stateful<Div> {
         .bg(ui::surface())
         .cursor_pointer()
         .hover(|s| s.bg(ui::cursor_bg()))
-        .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.open_games(name.clone(), cx)))
+        .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+            this.start_from_rail();
+            this.open_games(name.clone(), cx)
+        }))
         .child(
             div()
                 .h_flex()
@@ -612,7 +615,10 @@ pub(super) fn tourney_row(i: usize, s: &td::Summary, t: &td::Tourneys, cx: &mut 
         .cursor_pointer()
         .hover(|s| s.bg(ui::cursor_bg()))
         .debug_selector(move || format!("tourney-row-{i}"))
-        .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.open_tourney(id.clone(), cx)))
+        .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+            this.start_from_rail();
+            this.open_tourney(id.clone(), cx)
+        }))
         .child(
             div()
                 .h_flex()
@@ -1357,7 +1363,10 @@ pub(super) fn user_row(i: usize, u: &User, cx: &mut Context<Viewer>) -> Stateful
         .bg(ui::surface())
         .cursor_pointer()
         .hover(|s| s.bg(ui::cursor_bg()))
-        .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| this.open_games(name.clone(), cx)))
+        .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+            this.start_from_rail();
+            this.open_games(name.clone(), cx)
+        }))
         .child(
             div()
                 .h_flex()

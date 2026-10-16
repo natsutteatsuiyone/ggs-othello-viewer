@@ -4167,3 +4167,20 @@ fn the_logs_follow_the_matches_on_screen_and_leave_the_users_own_channels(cx: &m
         assert!(conn.chat.conversations.iter().any(|c| c.key == ChatKey::Channel(".bob".into())), "and only that");
     });
 }
+
+#[gpui_kit::test]
+fn a_page_opened_from_the_rail_leaves_no_way_back(cx: &mut TestAppContext) {
+    let (viewer, cx) = fixture(cx);
+    cx.update(|_, cx| {
+        viewer.update(cx, |v, cx| {
+            v.rail = Rail::Tourneys;
+            v.on_message(lines(TOURNEYS), cx);
+            cx.notify();
+        })
+    });
+    settle(cx);
+    click("tourney-row-0", cx);
+    click("tourney-row-1", cx);
+    cx.update(|_, cx| assert!(matches!(&viewer.read(cx).sheet, Some(super::Sheet::Tourney(id)) if id == "1")));
+    assert!(cx.debug_bounds("back").is_none(), "switching tournaments in the rail is not a step to go back from");
+}

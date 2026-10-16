@@ -666,6 +666,12 @@ impl Viewer {
         }
     }
 
+    /// The rail picks what to look at, so a page opened from it starts afresh instead of leaving a way back.
+    pub(super) fn start_from_rail(&mut self) {
+        self.back.clear();
+        self.sheet = None;
+    }
+
     fn remember(&mut self, sheet: Sheet) {
         if self.back.len() == BACK_CAP {
             self.back.remove(0);
