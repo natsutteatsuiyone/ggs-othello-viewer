@@ -11,9 +11,7 @@ A desktop app for watching Othello games on the [Generic Game Server](https://sk
 - **Top**: the rankings
 - **Tourney**: tournaments run by `/td`, with standings and rounds
 - **Chat**: channels and private conversations
-- **Engine logs**: the search logs the players' engines post to their GGS channels, side by side under the board and
-  divided at each move. The logs button turns them on or off, and the choice is kept for the next start. While they
-  are on, the app joins the log channels of the games on screen and leaves them afterwards.
+- **Engine logs**: the players' engine search logs under the board, divided at each move
 
 ![Synchro view of both boards of a live synchro match, with the engines' search logs](docs/images/synchro.png)
 

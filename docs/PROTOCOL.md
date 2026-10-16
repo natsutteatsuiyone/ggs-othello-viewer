@@ -529,28 +529,10 @@ File references such as `Match.C:285` point into the GGS source the docker image
 * **Tells.** `tell pchat1 hi a` from pchat2 reaches pchat1 as `pchat2: hi a`, that is `<sender>: <text>`
   (`EXE_Client.C:561-562`). A tell to oneself comes back. A multi-line tell arrives as `pchat2: two` and
   `|lines`. A tell to a login that is not on gives `: ERR user 'pview1' not found.`
-* **Engine logs.** A convention of the engines, not of GGS, and not in the fixtures. Edax, Melody and
-  their clones join a channel named `.` and the first 7 characters of their login, `chann + .iEdax`, and
-  `tell` their search logs to it. A name has at most 8 characters, so `Rhapsody` logs to `.Rhapsod`
-  (ODK's `SendMsg` sends `tell .` and `GetLogin().substr(0, 7)`). A spectator joins the same channel.
-  The lines arrive as ordinary channel lines, `.iEdax iEdax: <text>`. An engine may send a report as one
-  multi-line tell or as one tell per line, in its own format. Edax sends one block per move, shown here
-  with the `|` continuation of a multi-line tell (see **Tells**):
-
-  ```
-  .iEdax iEdax: -----------------------------------------
-  |iEdax plays F2 in game .1.1 using 4 threads ;
-  |score == -2 at 38@87% ; PV: F2 e7 B6 c7 B3 c2 F8 a2  ;
-  |nodes:  2.149 GN ; time: search = 10.4s, move = 4.3s; speed:  205.7 MN/s.
-  |search out of time at 38@87%
-  ```
-
-  The viewer reads a channel line as a log when its sender owns the channel, that is when the channel
-  is `.` and the first 7 characters of the sender's login. It keeps each line as sent and divides the
-  logs only where `/os: update` announces one of the player's moves, so it needs nothing from a
-  format. It does not show a line that has only dashes. Each player of a synchro match logs both boards
-  to the one channel. While engine logs are on, the viewer joins the channels of the players of the
-  games on screen and leaves the ones it joined when no game on screen needs them.
+* **Engine logs.** An engine convention, not GGS, and not in the fixtures. Edax and its clones `tell` their
+  search logs to the channel `.` plus the first 7 characters of their login (`.iEdax`, `.Rhapsod`), one
+  multi-line tell or one tell per line, in their own format. The viewer takes a channel line as a log
+  when the sender owns the channel, keeps it as sent, and divides the logs at each `/os: update`.
 * **Kibitz echo.** `/os` does not send a kibitz line back to its sender (GameLib `VC_SEQ.C:101`). In the
   capture the other login received `/os: .1 A 1720 pchat1: kibitz to all` and
   `/os: .1 O 1720 pchat1: observers only`, and pchat1 received neither.
