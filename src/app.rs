@@ -24,6 +24,7 @@ use crate::proto::{
     self, Archived, HelpText, MatchEntry, MatchSettings, OsMsg, Profile, Rank, RatingType, Seen, ServerMsg, User,
     UserStatus,
 };
+use crate::search;
 use crate::td::{self, TdMsg};
 use crate::ui;
 

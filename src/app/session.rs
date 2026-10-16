@@ -353,7 +353,19 @@ impl Viewer {
             }
             ServerMsg::Chat { key, line } => {
                 note_block(&mut self.log, vec![format!("{} {}: {}", key.label(), line.from, line.lines.join(" / "))]);
-                if let Screen::Connected(conn) = &mut self.session.screen {
+                // An engine's report goes to its game rather than the chat, where every move would mark it unread.
+                // A report on a game not shown is dropped.
+                let report = match key {
+                    ChatKey::Channel(_) => search::parse(&line),
+                    _ => None,
+                };
+                if let Some(log) = report {
+                    if let Some((_, lobby)) = self.session.connected_mut()
+                        && let Some(game) = lobby.games.get_mut(&log.game)
+                    {
+                        game.add_search(log);
+                    }
+                } else if let Screen::Connected(conn) = &mut self.session.screen {
                     self.attention |= conn.chat.add(key, line, SystemTime::now());
                     if self.rail == Rail::Chat {
                         self.chat_scroll.scroll_to_end();
