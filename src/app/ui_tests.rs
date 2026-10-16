@@ -3856,6 +3856,11 @@ fn engine_logs_join_both_players_channels_and_reports_stay_out_of_the_chat(cx: &
                     .any(|l| l.contains("plays"))),
                 "a report is not chat"
             );
+            v.on_message(vec![".chat bob: bob plays d3 in game .12".into()], cx);
+            let d3 = crate::othello::Move::parse("d3").unwrap();
+            assert!(v.session.lobby.games[".12"].search(d3).is_none(), "only the sender's log channel carries reports");
+            let Screen::Connected(conn) = &v.session.screen else { unreachable!() };
+            assert!(conn.chat.current().unwrap().lines.iter().any(|s| s.line.lines == ["bob plays d3 in game .12"]));
         })
     });
     settle(cx);
