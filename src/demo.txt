@@ -47,7 +47,7 @@ READY
 /os: join .15.1
 |(;GM[Othello]PC[GGS/os]DT[2026.09.30_12:00:00.GMT]PB[dave]PW[carol]RB[1690.00]RW[1700.00]
 |TI[05:00//02:00]TY[s8]RE[?]BO[8 -------- -------- -------- ---O*--- ---*O--- -------- -------- -------- *]
-|B[e6/2.16/5.42]W[d6/-0.41/11.12]B[c5/-2.40/9.64]W[f4/-5.02/3.95]B[f5/4.50/8.89]W[c6/1.31/1.34]B[e7/-0.98/9.21]W[g5/5.20/5.35]B[e3/3.17/7.09]W[f6/-1.92/4.53]B[c7/0.96/5.75]W[e2/5.34/5.95]B[f2/-5.27/8.57];)
+|B[e6/2.16/5.42]W[d6/-0.41/11.12]B[c5/-2.40/9.64]W[f4/-5.02/3.95]B[f5/4.50/8.89]W[c6/1.31/1.34]B[e7/-0.98/9.21]W[g5/5.20/5.35]B[e3/3.17/7.09]W[f6/-1.92/4.53]B[c7/0.96/5.75]W[e2/5.34/5.95]B[f2/-5.27/8.57]W[c4/-3.39/2.60];)
 READY
 /os: join .19
 |(;GM[Othello]PC[GGS/os]DT[2026.09.30_12:00:00.GMT]PB[erin]PW[frank]RB[1500.00]RW[1480.00]
@@ -82,20 +82,30 @@ READY
 READY
 /os: + eve watch .12
 READY
-/os: update .15.0 c2/-5.83/7.69
-READY
 /os: update .19 h2/-4.99/10.17
 READY
 /os: update .25 f3/1.19/8.47
 READY
 /os: update .27 f3/-4.11/5.63
 READY
+.carol carol: -----------------------------------------
+carol plays G4 in game .15.0 using 4 threads ;
+score == +3 at 24@87% ; PV: G4 h4 G3 e6 A4 h2 G5 h6  ;
+nodes:  158.5 MN ; time: search = 5.0s, move = 5.0s; speed:  31.70 MN/s.
+search completed
+READY
+.dave dave: -----------------------------------------
+dave plays H5 in game .15.1 using 4 threads ;
+score == +6 at 24@87% ; PV: H5 c8 B6 a6 G4 h4 F3 f1  ;
+nodes:  95.1 MN ; time: search = 3.0s, move = 3.0s; speed:  31.70 MN/s.
+search completed
+READY
+/os: update .15.0 g4/3.00/5.00
+READY
+/os: update .15.1 h5/6.00/3.00
+READY
 ~
 /os: update .12 c3/0.50/2.73
-READY
-/os: update .15.0 g6/5.67/6.79
-READY
-/os: update .15.1 c4/-3.39/2.60
 READY
 /os: update .19 i1/-0.30/6.28
 READY
@@ -105,19 +115,47 @@ READY
 READY
 /os: update .27 f1/1.03/6.59
 READY
+.dave dave: -----------------------------------------
+dave plays H4 in game .15.0 using 4 threads ;
+score == -3 at 25@87% ; PV: H4 g3 E6 a4 H2 g5 H6 e1  ;
+nodes:  126.8 MN ; time: search = 4.0s, move = 4.0s; speed:  31.70 MN/s.
+search completed
+READY
+.carol carol: -----------------------------------------
+carol plays C8 in game .15.1 using 4 threads ;
+score == +4 at 25@87% ; PV: C8 b6 A6 g4 H4 f3 F1 d7  ;
+nodes:  253.6 MN ; time: search = 8.0s, move = 8.0s; speed:  31.70 MN/s.
+search completed
+READY
+/os: update .15.0 h4/-3.00/4.00
+READY
+/os: update .15.1 c8/4.00/8.00
+READY
 ~
 /os: update .12 d3/-0.40/5.12
 READY
-/os: update .15.1 h6/-1.33/4.25
-READY
 /os: update .23 e8/1.72/1.00
+READY
+.carol carol: -----------------------------------------
+carol plays G3 in game .15.0 using 4 threads ;
+score == +5 at 25@87% ; PV: G3 e6 A4 h2 G5 h6 E1 c2  ;
+nodes:  63.4 MN ; time: search = 2.0s, move = 2.0s; speed:  31.70 MN/s.
+search completed
+READY
+.dave dave: -----------------------------------------
+dave plays B6 in game .15.1 using 4 threads ;
+score == +5 at 25@87% ; PV: B6 a6 G4 h4 F3 f1 D7 e8  ;
+nodes:  63.4 MN ; time: search = 2.0s, move = 2.0s; speed:  31.70 MN/s.
+search completed
+READY
+/os: update .15.0 g3/5.00/2.00
+READY
+/os: update .15.1 b6/5.00/2.00
 READY
 ~
 /os: .12 eve: nice tiger
 READY
 /os: update .12 c4/1.10/1.05
-READY
-/os: update .15.0 g5/2.41/6.31
 READY
 /os: update .23 f7/3.66/10.00
 READY
@@ -125,10 +163,24 @@ READY
 READY
 /os: update .27 c1/-5.50/7.83
 READY
+.dave dave: -----------------------------------------
+dave plays E6 in game .15.0 using 4 threads ;
+score == +6 at 25@87% ; PV: E6 a4 H2 g5 H6 e1 C2 g6  ;
+nodes:  158.5 MN ; time: search = 5.0s, move = 5.0s; speed:  31.70 MN/s.
+search completed
+READY
+.carol carol: -----------------------------------------
+carol plays A6 in game .15.1 using 4 threads ;
+score == +6 at 25@87% ; PV: A6 g4 H4 f3 F1 d7 E8 b4  ;
+nodes:  158.5 MN ; time: search = 5.0s, move = 5.0s; speed:  31.70 MN/s.
+search completed
+READY
+/os: update .15.0 e6/6.00/5.00
+READY
+/os: update .15.1 a6/6.00/5.00
+READY
 ~
 /os: update .12 f4/-1.00/8.40
-READY
-/os: update .15.1 h5/0.70/7.72
 READY
 /os: update .19 h5/-0.13/0.54
 READY
@@ -138,12 +190,26 @@ READY
 READY
 /os: - match .19 1500 erin 1480 frank 10 U -4.00
 READY
+.carol carol: -----------------------------------------
+carol plays A4 in game .15.0 using 4 threads ;
+score == -3 at 25@87% ; PV: A4 h2 G5 h6 E1 c2 G6 c5  ;
+nodes:  190.2 MN ; time: search = 6.0s, move = 6.0s; speed:  31.70 MN/s.
+search completed
+READY
+.dave dave: -----------------------------------------
+dave plays G4 in game .15.1 using 4 threads ;
+score == +4 at 25@87% ; PV: G4 h4 F3 f1 D7 e8 B4 a4  ;
+nodes:  317.0 MN ; time: search = 10.0s, move = 10.0s; speed:  31.70 MN/s.
+search completed
+READY
+/os: update .15.0 a4/-3.00/6.00
+READY
+/os: update .15.1 g4/4.00/10.00
+READY
 ~
 /os: + match .21 1600 gina 1580 hank 8 U
 READY
 /os: update .12 f6/2.00/3.33
-READY
-/os: update .15.1 d2/4.15/3.20
 READY
 /os: update .25 f7/-0.07/4.90
 READY
@@ -154,12 +220,24 @@ READY
 |TI[05:00//02:00]TY[8]RE[?]BO[8 -------- -------- -------- ---O*--- ---*O--- -------- -------- -------- *]
 |B[c4/-2.75/1.99]W[e3/4.20/8.27]B[f4/-1.13/6.67]W[g5/2.41/1.53]B[e2/3.60/2.61]W[e1/-2.77/0.69]B[f2/3.62/1.46]W[c6/-3.33/3.54]B[d2/-0.55/4.40]W[g3/-0.99/11.03]B[e6/-4.45/6.56]W[f3/5.26/11.65]B[g4/-5.40/2.82]W[c3/1.54/6.61]B[b2/-2.52/6.25]W[d3/-2.75/9.74]B[h2/-5.56/0.71]W[b5/0.61/2.68]B[a6/-3.05/5.64]W[f6/3.83/5.47]B[h6/0.55/10.72]W[h5/-2.31/2.97]B[c2/-1.89/10.07]W[g2/-1.14/4.50];)
 READY
+.dave dave: -----------------------------------------
+dave plays H2 in game .15.0 using 4 threads ;
+score == -5 at 26@87% ; PV: H2 g5 H6 e1 C2 g6 C5 b6  ;
+nodes:  63.4 MN ; time: search = 2.0s, move = 2.0s; speed:  31.70 MN/s.
+search completed
+READY
+.carol carol: -----------------------------------------
+carol plays H4 in game .15.1 using 4 threads ;
+score == +1 at 26@87% ; PV: H4 f3 F1 d7 E8 b4 A4 g1  ;
+nodes:  221.9 MN ; time: search = 7.0s, move = 7.0s; speed:  31.70 MN/s.
+search completed
+READY
+/os: update .15.0 h2/-5.00/2.00
+READY
+/os: update .15.1 h4/1.00/7.00
+READY
 ~
 /os: update .12 f3/-2.50/6.66
-READY
-/os: update .15.0 g4/-5.07/2.20
-READY
-/os: update .15.1 b8/2.31/7.64
 READY
 /os: update .23 g7/-5.27/3.59
 READY
@@ -167,19 +245,47 @@ READY
 READY
 /os: update .29 b7/-0.40/1.86
 READY
+.carol carol: -----------------------------------------
+carol plays G5 in game .15.0 using 4 threads ;
+score == -1 at 26@87% ; PV: G5 h6 E1 c2 G6 c5 B6 f6  ;
+nodes:  95.1 MN ; time: search = 3.0s, move = 3.0s; speed:  31.70 MN/s.
+search completed
+READY
+.dave dave: -----------------------------------------
+dave plays F3 in game .15.1 using 4 threads ;
+score == -4 at 26@87% ; PV: F3 f1 D7 e8 B4 a4 G1 h1  ;
+nodes:  158.5 MN ; time: search = 5.0s, move = 5.0s; speed:  31.70 MN/s.
+search completed
+READY
+/os: update .15.0 g5/-1.00/3.00
+READY
+/os: update .15.1 f3/-4.00/5.00
+READY
 ~
 /os: update .12 e6/3.25/2.00
-READY
-/os: update .15.1 c3/5.24/0.70
 READY
 /os: update .23 g8/5.93/4.95
 READY
 /os: update .29 c1/-4.30/6.53
 READY
+.dave dave: -----------------------------------------
+dave plays H6 in game .15.0 using 4 threads ;
+score == -3 at 26@87% ; PV: H6 e1 C2 g6 C5 b6 F6 h5  ;
+nodes:  253.6 MN ; time: search = 8.0s, move = 8.0s; speed:  31.70 MN/s.
+search completed
+READY
+.carol carol: -----------------------------------------
+carol plays F1 in game .15.1 using 4 threads ;
+score == +0 at 26@87% ; PV: F1 d7 E8 b4 A4 g1 H1 g3  ;
+nodes:  190.2 MN ; time: search = 6.0s, move = 6.0s; speed:  31.70 MN/s.
+search completed
+READY
+/os: update .15.0 h6/-3.00/8.00
+READY
+/os: update .15.1 f1/0.00/6.00
+READY
 ~
 /os: update .12 e7/-3.00/9.99
-READY
-/os: update .15.1 f8/-2.65/1.80
 READY
 /os: update .23 f8/4.77/6.09
 READY
@@ -189,20 +295,48 @@ READY
 READY
 /os: update .29 h4/-5.98/9.13
 READY
+.carol carol: -----------------------------------------
+carol plays E1 in game .15.0 using 4 threads ;
+score == +4 at 26@87% ; PV: E1 c2 G6 c5 B6 f6 H5 h3  ;
+nodes:  221.9 MN ; time: search = 7.0s, move = 7.0s; speed:  31.70 MN/s.
+search completed
+READY
+.dave dave: -----------------------------------------
+dave plays D7 in game .15.1 using 4 threads ;
+score == -2 at 26@87% ; PV: D7 e8 B4 a4 G1 h1 G3 h2  ;
+nodes:  63.4 MN ; time: search = 2.0s, move = 2.0s; speed:  31.70 MN/s.
+search completed
+READY
+/os: update .15.0 e1/4.00/7.00
+READY
+/os: update .15.1 d7/-2.00/2.00
+READY
 ~
 
-/os: update .15.1 h4/2.56/10.87
-READY
 /os: update .23 b4/-5.22/4.99
 READY
 /os: update .27 c7/3.07/10.32
 READY
 /os: update .29 a1/4.02/3.78
 READY
+.dave dave: -----------------------------------------
+dave plays C2 in game .15.0 using 4 threads ;
+score == +2 at 27@87% ; PV: C2 g6 C5 b6 F6 h5 H3 h1  ;
+nodes:  95.1 MN ; time: search = 3.0s, move = 3.0s; speed:  31.70 MN/s.
+search completed
+READY
+.carol carol: -----------------------------------------
+carol plays E8 in game .15.1 using 4 threads ;
+score == -5 at 27@87% ; PV: E8 b4 A4 g1 H1 g3 H2 h3  ;
+nodes:  253.6 MN ; time: search = 8.0s, move = 8.0s; speed:  31.70 MN/s.
+search completed
+READY
+/os: update .15.0 c2/2.00/3.00
+READY
+/os: update .15.1 e8/-5.00/8.00
+READY
 ~
 /os: - match .12 1850 alice 1720 bob 8 U -64.00
-READY
-/os: update .15.1 c2/-0.77/4.13
 READY
 /os: update .27 h1/3.74/7.76
 READY
