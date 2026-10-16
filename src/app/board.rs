@@ -1,4 +1,5 @@
 use super::*;
+use crate::search::{SearchLog, Searches};
 
 #[derive(Default)]
 pub(super) struct BoardPane {
@@ -360,12 +361,12 @@ pub(super) fn player_panel(game: &Game, at: At, flipped: bool, now: Instant, wid
         .child(cell(right))
 }
 
-/// One box per player, under the player panels' columns. A player's engine logs both boards of a synchro
-/// match to one channel, so a box follows the engine rather than a color: live, its newest log on either
-/// board; browsing, its log on its last move up to position `at` of the board shown. Every box keeps the
-/// same height, scrolling a long log, so a log arriving or the position changing never resizes the board.
+/// One box per player, under the player panels' columns, listing that player's engine reports newest first;
+/// scrolling down goes back in time. A player's engine logs both boards of a synchro match to one channel, so
+/// a box follows the engine rather than a color. Browsing, the list starts at the report on the player's last
+/// move up to position `at` of the board shown. Every box keeps its height, so the board never resizes.
 pub(super) fn engine_logs(
-    searches: &crate::search::Searches,
+    searches: &Searches,
     halves: &[&Game],
     game: &Game,
     at: At,
@@ -379,66 +380,19 @@ pub(super) fn engine_logs(
             Color::Black => &game.black.name,
             Color::White => &game.white.name,
         };
-        let log = match at {
-            None => searches.latest(name, &ids),
-            Some(k) => game.moves()[..k]
+        let mut history: Vec<&SearchLog> = searches.history(name, &ids).collect();
+        if let Some(k) = at {
+            let anchor = game.moves()[..k]
                 .iter()
                 .rev()
                 .find(|m| m.color == color && m.token.mv != crate::othello::Move::Pass)
-                .and_then(|m| searches.on_move(name, &game.id, m.token.mv)),
-        };
-        let label = |text: &'static str| div().flex_none().w(px(44.)).text_color(ui::muted()).child(text);
-        let value = |text: String| div().flex_1().min_w_0().truncate().font_family(ui::MONO).child(text);
-        let row = || div().h(px(20.)).flex_none().h_flex().gap_2();
-        let place = log.map(|log| {
-            let mv = log.mv.map(|m| m.to_string());
-            let game = log.game.clone().filter(|_| synchro);
-            [game, mv].into_iter().flatten().collect::<Vec<_>>().join(" · ")
-        });
-        let head = row()
-            .child(div().flex_1().min_w_0().truncate().font_weight(FontWeight::SEMIBOLD).child(name.clone()))
-            .children(place.map(|p| div().flex_none().font_family(ui::MONO).text_color(ui::muted()).child(p)));
-        let mut body: Vec<Div> = Vec::new();
-        match log {
-            Some(log) => {
-                if log.score.is_some() || log.depth.is_some() {
-                    body.push(
-                        row()
-                            .h(px(26.))
-                            .child(label("score"))
-                            .child(
-                                div()
-                                    .flex_none()
-                                    .font_family(ui::MONO)
-                                    .text_base()
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .text_color(ui::bright())
-                                    .child(log.score.clone().unwrap_or_default()),
-                            )
-                            .child(
-                                div()
-                                    .font_family(ui::MONO)
-                                    .text_color(ui::muted())
-                                    .child(log.depth.clone().unwrap_or_default()),
-                            ),
-                    );
-                }
-                if let Some(pv) = &log.pv {
-                    body.push(row().child(label("PV")).child(value(pv.clone())));
-                }
-                let stats: Vec<String> = [&log.nodes, &log.time, &log.speed].into_iter().flatten().cloned().collect();
-                if !stats.is_empty() {
-                    body.push(row().text_color(ui::muted()).child(value(stats.join(" · "))));
-                }
-                // Lines in another format come as they are, wrapped; beside the fields they are a footnote.
-                let muted = log.has_fields();
-                body.extend(log.rest.iter().map(|l| {
-                    div().flex_none().font_family(ui::MONO).when(muted, |d| d.text_color(ui::muted())).child(l.clone())
-                }));
+                .and_then(|m| searches.on_move(name, &game.id, m.token.mv));
+            match history.iter().position(|l| anchor.is_some_and(|a| std::ptr::eq(*l, a))) {
+                Some(i) => drop(history.drain(..i)),
+                None => history.clear(),
             }
-            None => body.push(row().text_color(ui::muted()).child("No search log.")),
         }
-        let selector = match log {
+        let selector = match history.first() {
             Some(l) => format!(
                 "search-{}-{}-{}",
                 l.engine,
@@ -447,27 +401,28 @@ pub(super) fn engine_logs(
             ),
             None => format!("search-{name}-none"),
         };
+        let empty = history.is_empty();
         div()
             .debug_selector(move || selector.clone())
             .flex_1()
             .min_w_0()
             .v_flex()
-            .gap_0p5()
+            .gap_1()
             .px_3()
             .py_2()
             .rounded(px(ui::RADIUS))
             .bg(ui::surface())
             .text_sm()
-            .child(head)
+            .child(div().h(px(20.)).truncate().font_weight(FontWeight::SEMIBOLD).child(name.clone()))
             .child(
                 div()
                     .id(SharedString::from(format!("search-body-{name}")))
-                    .h(px(26. + 20. * 2. + 4.))
+                    .h(px(ui::SEARCH_H))
                     .overflow_y_scroll()
                     .v_flex()
-                    .gap_0p5()
                     .text_xs()
-                    .children(body),
+                    .when(empty, |d| d.child(div().text_color(ui::muted()).child("No search log.")))
+                    .children(history.into_iter().enumerate().map(|(i, log)| report(log, synchro, i > 0))),
             )
     };
     let (left, right) = if flipped { (Color::White, Color::Black) } else { (Color::Black, Color::White) };
@@ -478,6 +433,58 @@ pub(super) fn engine_logs(
         .gap(px(ui::PANEL_GAP))
         .child(cell(left))
         .child(cell(right))
+}
+
+/// One report: the board and move it is about, the Edax fields laid out by name, then its other lines.
+fn report(log: &SearchLog, synchro: bool, ruled: bool) -> Div {
+    let label = |text: &'static str| div().flex_none().w(px(44.)).text_color(ui::muted()).child(text);
+    let value = |text: String| div().flex_1().min_w_0().truncate().font_family(ui::MONO).child(text);
+    let row = || div().min_h(px(20.)).flex_none().h_flex().gap_2();
+    let place: Vec<String> =
+        [log.game.clone().filter(|_| synchro), log.mv.map(|m| m.to_string())].into_iter().flatten().collect();
+    let stats: Vec<String> = [&log.nodes, &log.time, &log.speed].into_iter().flatten().cloned().collect();
+    // Beside the fields, other lines are a footnote; without them, they are the report.
+    let muted = log.has_fields();
+    let selector = format!(
+        "search-report-{}-{}-{}",
+        log.engine,
+        log.game.as_deref().unwrap_or("any"),
+        log.mv.map_or("any".into(), |m| m.to_string())
+    );
+    div()
+        .debug_selector(move || selector.clone())
+        .flex_none()
+        .v_flex()
+        .gap_0p5()
+        .py_1p5()
+        .when(ruled, |d| d.border_t_1().border_color(ui::line()))
+        .when(!place.is_empty() || log.score.is_some() || log.depth.is_some(), |d| {
+            d.child(
+                row()
+                    .min_h(px(26.))
+                    .children(log.score.clone().map(|s| {
+                        div()
+                            .flex_none()
+                            .font_family(ui::MONO)
+                            .text_base()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(ui::bright())
+                            .child(s)
+                    }))
+                    .children(log.depth.clone().map(|d| div().font_family(ui::MONO).text_color(ui::muted()).child(d)))
+                    .child(div().flex_1())
+                    .when(!place.is_empty(), |d| {
+                        d.child(
+                            div().flex_none().font_family(ui::MONO).text_color(ui::muted()).child(place.join(" · ")),
+                        )
+                    }),
+            )
+        })
+        .children(log.pv.clone().map(|pv| row().child(label("PV")).child(value(pv))))
+        .when(!stats.is_empty(), |d| d.child(row().text_color(ui::muted()).child(value(stats.join(" · ")))))
+        .children(log.rest.iter().map(|l| {
+            div().flex_none().font_family(ui::MONO).when(muted, |d| d.text_color(ui::muted())).child(l.clone())
+        }))
 }
 
 pub(super) fn under_board<T: 'static>(

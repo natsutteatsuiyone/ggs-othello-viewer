@@ -205,6 +205,8 @@ pub const BOARD_GAP: f32 = 2.;
 pub const FRAME: f32 = 2. * (BOARD_FRAME + 1.);
 pub const LAST_INSET: f32 = 2.;
 pub const PANEL_GAP: f32 = 10.;
+/// The scrolling part of an engine log box under the board: about two Edax reports.
+pub const SEARCH_H: f32 = 140.;
 pub const LOGIN_W: f32 = 380.;
 /// The widest a page (help, games, tournament) grows, so its rows stay readable on a wide window.
 pub const PAGE_MAX_W: f32 = 1100.;

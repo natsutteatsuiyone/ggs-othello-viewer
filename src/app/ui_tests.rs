@@ -3901,6 +3901,9 @@ fn a_synchro_box_follows_its_engine_across_both_boards(cx: &mut TestAppContext) 
     settle(cx);
     assert!(cx.debug_bounds("search-alice-.20.1-h8").is_some(), "the newest report shows, whichever board it is about");
     assert!(cx.debug_bounds("search-alice-.20.0-a1").is_none());
+    let newer = cx.debug_bounds("search-report-alice-.20.1-h8").unwrap();
+    let older = cx.debug_bounds("search-report-alice-.20.0-a1").expect("earlier reports stay to scroll back to");
+    assert!(older.top() >= newer.bottom(), "newest first");
 }
 
 #[gpui_kit::test]

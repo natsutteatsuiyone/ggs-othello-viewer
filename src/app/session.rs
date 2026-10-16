@@ -357,7 +357,10 @@ impl Viewer {
                 // move would mark it unread. Engines log in their own formats, so the channel decides, not the text.
                 if matches!(&key, ChatKey::Channel(c) if search::is_log(c, &line.from)) {
                     if let Some((_, lobby)) = self.session.connected_mut() {
-                        lobby.searches.add(search::parse(&line), Instant::now());
+                        let now = Instant::now();
+                        for text in &line.lines {
+                            lobby.searches.add(&line.from, text, now);
+                        }
                     }
                 } else if let Screen::Connected(conn) = &mut self.session.screen {
                     self.attention |= conn.chat.add(key, line, SystemTime::now());
