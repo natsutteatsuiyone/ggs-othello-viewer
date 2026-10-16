@@ -11,6 +11,7 @@ mod lobby;
 mod net;
 mod othello;
 mod proto;
+mod search;
 mod store;
 mod td;
 mod ui;
