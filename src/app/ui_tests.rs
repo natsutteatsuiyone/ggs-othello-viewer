@@ -3845,7 +3845,8 @@ fn engine_logs_join_both_players_channels_and_reports_stay_out_of_the_chat(cx: &
                 cx,
             );
             let c5 = crate::othello::Move::parse("c5").unwrap();
-            let report = v.session.lobby.games[".12"].search(c5).expect("the report is kept with its game");
+            let report =
+                v.session.lobby.searches.on_move("bob", ".12", c5).expect("the report is kept with its engine");
             assert_eq!(report.pv.as_deref(), Some("C5 f6"));
             let Screen::Connected(conn) = &v.session.screen else { unreachable!() };
             assert!(
@@ -3858,7 +3859,10 @@ fn engine_logs_join_both_players_channels_and_reports_stay_out_of_the_chat(cx: &
             );
             v.on_message(vec![".chat bob: bob plays d3 in game .12".into()], cx);
             let d3 = crate::othello::Move::parse("d3").unwrap();
-            assert!(v.session.lobby.games[".12"].search(d3).is_none(), "only the sender's log channel carries reports");
+            assert!(
+                v.session.lobby.searches.on_move("bob", ".12", d3).is_none(),
+                "only the sender's log channel carries reports"
+            );
             let Screen::Connected(conn) = &v.session.screen else { unreachable!() };
             assert!(conn.chat.current().unwrap().lines.iter().any(|s| s.line.lines == ["bob plays d3 in game .12"]));
         })
@@ -3874,4 +3878,46 @@ fn engine_logs_join_both_players_channels_and_reports_stay_out_of_the_chat(cx: &
     settle(cx);
     cx.update(|_, cx| assert!(sent(viewer.read(cx), "> chann - .alice .bob")));
     assert!(cx.debug_bounds("search").is_none(), "leaving the channels removes the boxes");
+}
+
+#[gpui_kit::test]
+fn a_synchro_box_follows_its_engine_across_both_boards(cx: &mut TestAppContext) {
+    let (viewer, cx) = fixture(cx);
+    add_synchro_pair(&viewer, cx);
+    let button = cx.debug_bounds("search-follow").unwrap();
+    cx.simulate_click(button.center(), Default::default());
+    settle(cx);
+    let report = |game: &str, mv: &str| {
+        vec![
+            ".alice alice: ---".into(),
+            format!("alice plays {mv} in game {game} ;"),
+            "score == +3 at 20 ; PV: a1 ;".into(),
+        ]
+    };
+    cx.update(|_, cx| viewer.update(cx, |v, cx| v.on_message(report(".20.0", "a1"), cx)));
+    settle(cx);
+    assert!(cx.debug_bounds("search-alice-.20.0-a1").is_some());
+    cx.update(|_, cx| viewer.update(cx, |v, cx| v.on_message(report(".20.1", "h8"), cx)));
+    settle(cx);
+    assert!(cx.debug_bounds("search-alice-.20.1-h8").is_some(), "the newest report shows, whichever board it is about");
+    assert!(cx.debug_bounds("search-alice-.20.0-a1").is_none());
+}
+
+#[gpui_kit::test]
+fn any_format_an_engine_logs_to_its_own_channel_shows_and_stays_out_of_the_chat(cx: &mut TestAppContext) {
+    let (viewer, cx) = fixture(cx);
+    let button = cx.debug_bounds("search-follow").unwrap();
+    cx.simulate_click(button.center(), Default::default());
+    settle(cx);
+    cx.update(|_, cx| {
+        viewer.update(cx, |v, cx| {
+            v.on_message(vec![".bob bob: depth 24  eval +6  pv c5 d6".into()], cx);
+            let Screen::Connected(conn) = &v.session.screen else { unreachable!() };
+            assert!(
+                conn.chat.conversations.iter().flat_map(|c| &c.lines).all(|s| !s.line.lines[0].starts_with("depth 24"))
+            );
+        })
+    });
+    settle(cx);
+    assert!(cx.debug_bounds("search-bob-any-any").is_some(), "a log naming no board or move still shows, live");
 }

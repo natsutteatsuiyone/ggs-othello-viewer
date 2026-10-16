@@ -1144,7 +1144,7 @@ impl Viewer {
                 measure(cx.weak_entity(), |this: &mut Viewer, s| this.board.focus_fit.board(s)),
             ))
             .child(under_board(game, at, width, cx, Viewer::navigate))
-            .when(following, |d| d.child(engine_logs(game, at, view.flipped, width)))
+            .when(following, |d| d.child(engine_logs(&lobby.searches, &halves, game, at, view.flipped, width)))
             .on_prepaint(measure(cx.weak_entity(), |this: &mut Viewer, s| this.board.focus_fit.column(s)))
     }
 }

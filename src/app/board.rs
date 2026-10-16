@@ -360,59 +360,115 @@ pub(super) fn player_panel(game: &Game, at: At, flipped: bool, now: Instant, wid
         .child(cell(right))
 }
 
-/// Each player's engine report on their latest move up to position `at`, in boxes under the player panels'
-/// columns. Every box keeps four rows, so a report arriving or the position changing never resizes the board.
-pub(super) fn engine_logs(game: &Game, at: At, flipped: bool, width: f32) -> Div {
-    let k = at.unwrap_or(game.moves().len());
+/// One box per player, under the player panels' columns. A player's engine logs both boards of a synchro
+/// match to one channel, so a box follows the engine rather than a color: live, its newest log on either
+/// board; browsing, its log on its last move up to position `at` of the board shown. Every box keeps the
+/// same height, scrolling a long log, so a log arriving or the position changing never resizes the board.
+pub(super) fn engine_logs(
+    searches: &crate::search::Searches,
+    halves: &[&Game],
+    game: &Game,
+    at: At,
+    flipped: bool,
+    width: f32,
+) -> Div {
+    let synchro = halves.len() > 1;
+    let ids: Vec<&str> = halves.iter().map(|g| g.id.as_str()).collect();
     let cell = |color: Color| {
-        let p = match color {
-            Color::Black => &game.black,
-            Color::White => &game.white,
+        let name = match color {
+            Color::Black => &game.black.name,
+            Color::White => &game.white.name,
         };
-        let mv = game.moves()[..k].iter().rev().find(|m| m.color == color && m.token.mv != crate::othello::Move::Pass);
-        let log = mv.and_then(|m| game.search(m.token.mv));
-        let joined = |parts: &[Option<String>], sep: &str| {
-            let parts: Vec<&str> = parts.iter().flatten().map(String::as_str).collect();
-            parts.join(sep)
+        let log = match at {
+            None => searches.latest(name, &ids),
+            Some(k) => game.moves()[..k]
+                .iter()
+                .rev()
+                .find(|m| m.color == color && m.token.mv != crate::othello::Move::Pass)
+                .and_then(|m| searches.on_move(name, &game.id, m.token.mv)),
         };
-        let rows: [(String, bool); 3] = match log {
-            Some(log) => [
-                (log.pv.as_ref().map(|pv| format!("PV  {pv}")).unwrap_or_default(), false),
-                (joined(&[log.nodes.clone(), log.time.clone(), log.speed.clone()], " · "), false),
-                (log.rest.join(" / "), true),
-            ],
-            None if mv.is_some() => [("No search log.".into(), true), Default::default(), Default::default()],
-            None => Default::default(),
-        };
-        let line = |text: String, muted: bool| {
-            div().h(px(18.)).min_w_0().truncate().when(muted, |d| d.text_color(ui::muted())).child(text)
+        let label = |text: &'static str| div().flex_none().w(px(44.)).text_color(ui::muted()).child(text);
+        let value = |text: String| div().flex_1().min_w_0().truncate().font_family(ui::MONO).child(text);
+        let row = || div().h(px(20.)).flex_none().h_flex().gap_2();
+        let place = log.map(|log| {
+            let mv = log.mv.map(|m| m.to_string());
+            let game = log.game.clone().filter(|_| synchro);
+            [game, mv].into_iter().flatten().collect::<Vec<_>>().join(" · ")
+        });
+        let head = row()
+            .child(div().flex_1().min_w_0().truncate().font_weight(FontWeight::SEMIBOLD).child(name.clone()))
+            .children(place.map(|p| div().flex_none().font_family(ui::MONO).text_color(ui::muted()).child(p)));
+        let mut body: Vec<Div> = Vec::new();
+        match log {
+            Some(log) => {
+                if log.score.is_some() || log.depth.is_some() {
+                    body.push(
+                        row()
+                            .h(px(26.))
+                            .child(label("score"))
+                            .child(
+                                div()
+                                    .flex_none()
+                                    .font_family(ui::MONO)
+                                    .text_base()
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(ui::bright())
+                                    .child(log.score.clone().unwrap_or_default()),
+                            )
+                            .child(
+                                div()
+                                    .font_family(ui::MONO)
+                                    .text_color(ui::muted())
+                                    .child(log.depth.clone().unwrap_or_default()),
+                            ),
+                    );
+                }
+                if let Some(pv) = &log.pv {
+                    body.push(row().child(label("PV")).child(value(pv.clone())));
+                }
+                let stats: Vec<String> = [&log.nodes, &log.time, &log.speed].into_iter().flatten().cloned().collect();
+                if !stats.is_empty() {
+                    body.push(row().text_color(ui::muted()).child(value(stats.join(" · "))));
+                }
+                // Lines in another format come as they are, wrapped; beside the fields they are a footnote.
+                let muted = log.has_fields();
+                body.extend(log.rest.iter().map(|l| {
+                    div().flex_none().font_family(ui::MONO).when(muted, |d| d.text_color(ui::muted())).child(l.clone())
+                }));
+            }
+            None => body.push(row().text_color(ui::muted()).child("No search log.")),
+        }
+        let selector = match log {
+            Some(l) => format!(
+                "search-{}-{}-{}",
+                l.engine,
+                l.game.as_deref().unwrap_or("any"),
+                l.mv.map_or("any".into(), |m| m.to_string())
+            ),
+            None => format!("search-{name}-none"),
         };
         div()
+            .debug_selector(move || selector.clone())
             .flex_1()
             .min_w_0()
             .v_flex()
+            .gap_0p5()
             .px_3()
             .py_2()
             .rounded(px(ui::RADIUS))
             .bg(ui::surface())
-            .font_family(ui::MONO)
-            .text_xs()
+            .text_sm()
+            .child(head)
             .child(
                 div()
-                    .h(px(18.))
-                    .h_flex()
-                    .gap_2()
-                    .child(ui::disc(color, ui::DISC_SM))
-                    .child(div().flex_1().min_w_0().truncate().font_weight(FontWeight::SEMIBOLD).child(match mv {
-                        Some(m) => format!("{} · {}", p.name, m.token.mv),
-                        None => p.name.clone(),
-                    }))
-                    .children(log.map(|log| {
-                        let score = log.score.as_ref().map(|s| format!("score {s}"));
-                        div().flex_none().child(joined(&[log.depth.clone(), score], "  "))
-                    })),
+                    .id(SharedString::from(format!("search-body-{name}")))
+                    .h(px(26. + 20. * 2. + 4.))
+                    .overflow_y_scroll()
+                    .v_flex()
+                    .gap_0p5()
+                    .text_xs()
+                    .children(body),
             )
-            .children(rows.into_iter().map(|(text, muted)| line(text, muted)))
     };
     let (left, right) = if flipped { (Color::White, Color::Black) } else { (Color::Black, Color::White) };
     div()

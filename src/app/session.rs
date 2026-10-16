@@ -353,18 +353,11 @@ impl Viewer {
             }
             ServerMsg::Chat { key, line } => {
                 note_block(&mut self.log, vec![format!("{} {}: {}", key.label(), line.from, line.lines.join(" / "))]);
-                // An engine's report goes to its game rather than the chat, where every move would mark it unread.
-                // A report on a game not shown is dropped. Only the sender's own log channel counts, so a line
-                // typed on `.chat` stays chat.
-                let report = match &key {
-                    ChatKey::Channel(c) if *c == search::channel(&line.from) => search::parse(&line),
-                    _ => None,
-                };
-                if let Some(log) = report {
-                    if let Some((_, lobby)) = self.session.connected_mut()
-                        && let Some(game) = lobby.games.get_mut(&log.game)
-                    {
-                        game.add_search(log);
+                // What an engine sends to its own log channel goes under the board rather than the chat, where every
+                // move would mark it unread. Engines log in their own formats, so the channel decides, not the text.
+                if matches!(&key, ChatKey::Channel(c) if search::is_log(c, &line.from)) {
+                    if let Some((_, lobby)) = self.session.connected_mut() {
+                        lobby.searches.add(search::parse(&line), Instant::now());
                     }
                 } else if let Screen::Connected(conn) = &mut self.session.screen {
                     self.attention |= conn.chat.add(key, line, SystemTime::now());

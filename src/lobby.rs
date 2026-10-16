@@ -169,6 +169,8 @@ pub struct Lobby {
     /// The server's `finger` of each login asked about; `None` when the server does not know it.
     pub profiles: BTreeMap<String, Option<Profile>>,
     pub tourneys: crate::td::Tourneys,
+    /// Engines' search logs, from the log channels joined.
+    pub searches: crate::search::Searches,
 }
 
 pub fn match_of(game_id: &str) -> &str {

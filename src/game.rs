@@ -7,7 +7,6 @@ use crate::clock::{Clock, ClockSetting, format_secs, hms};
 use crate::ggf::{GameRecord, Player};
 use crate::othello::{Board, Color, Move, MoveToken, Square};
 use crate::proto::{MatchResult, Outcome};
-use crate::search::SearchLog;
 
 #[derive(Clone, PartialEq, Debug)]
 pub enum Phase {
@@ -125,8 +124,6 @@ pub struct Game {
     pub match_ended: bool,
     pub observers: BTreeSet<String>,
     pub text: Vec<String>,
-    /// Engine reports on the moves played, at most one per square.
-    searches: Vec<SearchLog>,
 }
 
 impl Game {
@@ -194,7 +191,6 @@ impl Game {
             match_ended: false,
             observers: BTreeSet::new(),
             text: Vec::new(),
-            searches: Vec::new(),
         };
         for (i, token) in rec.moves.into_iter().enumerate() {
             game.play(token, now).map_err(|e| format!("GGF move {}: {e}", i + 1))?;
@@ -259,16 +255,6 @@ impl Game {
 
     pub fn moves(&self) -> &[PlayedMove] {
         &self.moves
-    }
-
-    /// A square is played at most once a game, so a later report on it replaces the earlier one.
-    pub fn add_search(&mut self, log: SearchLog) {
-        self.searches.retain(|s| s.mv != log.mv);
-        self.searches.push(log);
-    }
-
-    pub fn search(&self, mv: Move) -> Option<&SearchLog> {
-        self.searches.iter().find(|s| s.mv == mv)
     }
 
     fn komi_pending(&self) -> bool {
