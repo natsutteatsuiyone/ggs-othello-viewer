@@ -3,14 +3,22 @@ name: CI
 on:
   push:
     branches: [main]
+    paths-ignore: ['**.md']
   pull_request:
+    paths-ignore: ['**.md']
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
+        # macOS bills 10x and Windows 2x on private repos; run them only on manual dispatch
+        os: ${{ github.event_name == 'workflow_dispatch' && fromJSON('["windows-latest","macos-latest","ubuntu-latest"]') || fromJSON('["ubuntu-latest"]') }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
