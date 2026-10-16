@@ -862,8 +862,14 @@ impl Viewer {
                     .flex_none()
                     .h_flex()
                     .gap_2()
-                    .child(ui::disc(Color::White, ui::DISC_SM))
-                    .child(ui::disc(Color::Black, ui::DISC_SM))
+                    // The black disc lies over the white one.
+                    .child(
+                        div()
+                            .flex_none()
+                            .h_flex()
+                            .child(ui::disc(Color::White, ui::DISC_SM))
+                            .child(ui::disc(Color::Black, ui::DISC_SM).ml(px(-ui::DISC_SM * 0.4))),
+                    )
                     .child(div().ml_1().font_weight(FontWeight::BOLD).child("GGS Othello Viewer")),
             )
             // A long server label gives way first; the title and the buttons keep their width.
