@@ -195,6 +195,8 @@ pub struct Viewer {
     /// A tell or a mention arrived; the window asks for attention at the next draw if it is in the background.
     attention: bool,
     theme: ui::ThemeChoice,
+    /// Whether the boards show their players' engine logs; saved, so the next start begins the same way.
+    engine_logs: bool,
     /// Saved when the window closes.
     layout: ui::Layout,
     match_windows: BTreeMap<String, (AnyWindowHandle, WeakEntity<match_window::MatchWindow>)>,
@@ -252,6 +254,7 @@ impl Viewer {
                 cx.background_executor().timer(Duration::from_millis(980)).await;
                 let tick = |v: &mut Viewer, cx: &mut Context<Viewer>| {
                     v.release_tiles();
+                    v.sync_log_channels();
                     if v.session.watch_cleanup_at.is_some_and(|at| at.elapsed() >= Duration::from_secs(5)) {
                         v.stop_unused_watches(None, cx);
                     }
@@ -287,6 +290,7 @@ impl Viewer {
             Ok(db) => (Some(db), None),
             Err(e) => (None, Some(format!("could not open ggs.db, so logins, theme and chat are not saved: {e}"))),
         };
+        let engine_logs = db.as_ref().is_some_and(|db| crate::store::setting(db, "engine_logs") == "on");
         let history = db.as_ref().and_then(|db| History::load(db).ok()).unwrap_or_default();
         let layout = db.as_ref().map_or_else(ui::Layout::default, ui::Layout::load);
         let weak = cx.weak_entity();
@@ -411,6 +415,7 @@ impl Viewer {
             focus: cx.focus_handle(),
             attention: false,
             theme,
+            engine_logs,
             layout,
             match_windows: BTreeMap::new(),
             _ticker: ticker,
@@ -776,6 +781,49 @@ impl Viewer {
         }
     }
 
+    fn toggle_engine_logs(&mut self, cx: &mut Context<Self>) {
+        self.engine_logs = !self.engine_logs;
+        if let Some(db) = &self.db
+            && let Err(e) = crate::store::put_setting(db, "engine_logs", if self.engine_logs { "on" } else { "off" })
+        {
+            note(&mut self.log, format!("could not save the engine log setting: {e}"));
+        }
+        self.sync_log_channels();
+        cx.notify();
+    }
+
+    /// With engine logs on, joins the log channels of the players of every match on screen, here or in a
+    /// match window, and leaves the ones it joined that nothing on screen needs any more. A channel the
+    /// user joined is left alone.
+    pub(super) fn sync_log_channels(&mut self) {
+        let Some((conn, lobby)) = self.session.connected() else { return };
+        let shown: BTreeSet<&str> = lobby
+            .focus
+            .as_deref()
+            .map(match_of)
+            .into_iter()
+            .chain(self.match_windows.keys().map(String::as_str))
+            .collect();
+        let needed: BTreeSet<String> = lobby
+            .games
+            .values()
+            .filter(|g| self.engine_logs && g.source != GameSource::Archive && shown.contains(match_of(&g.id)))
+            .flat_map(|g| [search::channel(&g.black.name), search::channel(&g.white.name)])
+            .collect();
+        let joined = |c: &String| conn.chat.conversations.iter().any(|v| v.key == ChatKey::Channel(c.clone()));
+        let join: Vec<String> = needed.iter().filter(|c| !joined(c)).cloned().collect();
+        let leave: Vec<String> = conn.chat.log_channels.iter().filter(|c| !needed.contains(*c)).cloned().collect();
+        if !leave.is_empty() {
+            self.send(format!("chann - {}", leave.join(" ")));
+        }
+        if !join.is_empty()
+            && self.send(format!("chann + {}", join.join(" ")))
+            && let Screen::Connected(conn) = &mut self.session.screen
+        {
+            conn.chat.log_channels.extend(join);
+        }
+    }
+
     fn cycle_theme(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.theme = self.theme.next();
         ui::install(self.theme.is_light(window.appearance()), cx);
@@ -1001,21 +1049,18 @@ impl Viewer {
                                         .when(self.sheet.is_none() && lobby.view == ViewMode::Synchro, |d| {
                                             let halves = lobby.synchro_halves();
                                             let Some(game) = halves.iter().flatten().next() else { return d };
-                                            let Some((following, follow)) = self.engine_follow(game) else { return d };
+                                            let Some(on) = self.engine_logs_toggle(game) else { return d };
                                             d.child(div().flex_1()).child(
                                                 ui::icon_button(
                                                     "synchro-search-follow",
-                                                    ui::IconName::Cpu,
+                                                    ui::IconName::Logs,
                                                     "Engine logs",
-                                                    following,
+                                                    on,
                                                     true,
                                                 )
                                                 .debug_selector(|| "synchro-search-follow".into())
                                                 .on_click(cx.listener(
-                                                    move |this, _: &ClickEvent, _, cx| {
-                                                        this.send(follow.clone());
-                                                        cx.notify();
-                                                    },
+                                                    |this, _: &ClickEvent, _, cx| this.toggle_engine_logs(cx),
                                                 )),
                                             )
                                         }),
@@ -1093,8 +1138,8 @@ impl Viewer {
         let komi = game.komi.map(|k| format!(" · komi {}", ui::signed(k, Some(2)))).unwrap_or_default();
         let gid = game.id.clone();
         let copy_id = game.id.clone();
-        let follow = self.engine_follow(game);
-        let following = follow.as_ref().is_some_and(|(on, _)| *on);
+        let toggle = self.engine_logs_toggle(game);
+        let following = toggle == Some(true);
         if !following {
             self.board.search_scroll.forget();
         }
@@ -1148,13 +1193,10 @@ impl Viewer {
                                 ui::icon_button("flip", ui::IconName::FlipVertical2, "Flip", view.flipped, true)
                                     .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.flip(cx))),
                             )
-                            .children(follow.map(|(on, command)| {
-                                ui::icon_button("search-follow", ui::IconName::Cpu, "Engine logs", on, true)
+                            .children(toggle.map(|on| {
+                                ui::icon_button("search-follow", ui::IconName::Logs, "Engine logs", on, true)
                                     .debug_selector(|| "search-follow".into())
-                                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                                        this.send(command.clone());
-                                        cx.notify();
-                                    }))
+                                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.toggle_engine_logs(cx)))
                             }))
                             .child(ui::icon_button("unwatch", ui::IconName::X, stop, false, true).on_click(
                                 cx.listener(move |this, _: &ClickEvent, _, cx| {
@@ -1410,7 +1452,7 @@ impl Viewer {
         room: Size<f32>,
     ) -> (Size<f32>, Option<Div>) {
         let game = games.iter().flatten().next();
-        let Some(game) = game.filter(|g| self.engine_follow(g).is_some_and(|(on, _)| on)) else {
+        let Some(game) = game.filter(|g| self.engine_logs_toggle(g) == Some(true)) else {
             scroll.forget();
             return (room, None);
         };
@@ -1419,26 +1461,10 @@ impl Viewer {
         (size(room.width, room.height - taken), Some(logs))
     }
 
-    /// Whether both players' log channels are joined, and the `chann` command that toggles them; `None` for an
-    /// archived game, which no log is about.
-    fn engine_follow(&self, game: &Game) -> Option<(bool, String)> {
-        if game.source == GameSource::Archive {
-            return None;
-        }
-        let mut channels = vec![search::channel(&game.black.name), search::channel(&game.white.name)];
-        channels.dedup();
-        let joined = |c: &String| match &self.session.screen {
-            Screen::Connected(conn) => conn.chat.conversations.iter().any(|v| v.key == ChatKey::Channel(c.clone())),
-            _ => false,
-        };
-        let following = channels.iter().all(joined);
-        let command = match following {
-            true => format!("chann - {}", channels.join(" ")),
-            false => {
-                format!("chann + {}", channels.iter().filter(|c| !joined(c)).cloned().collect::<Vec<_>>().join(" "))
-            }
-        };
-        Some((following, command))
+    /// Whether engine logs are on, for the toggle beside `game`; `None` for an archived game, which no log is
+    /// about.
+    fn engine_logs_toggle(&self, game: &Game) -> Option<bool> {
+        (game.source != GameSource::Archive).then_some(self.engine_logs)
     }
 }
 

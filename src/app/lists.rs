@@ -334,7 +334,11 @@ impl Viewer {
                 _ => list.child(none("No messages.")),
             },
         };
-        let conversations = chat.conversations.iter().enumerate().map(|(i, c)| {
+        let listed = chat
+            .conversations
+            .iter()
+            .filter(|c| !matches!(&c.key, ChatKey::Channel(ch) if chat.log_channels.contains(ch)));
+        let conversations = listed.enumerate().map(|(i, c)| {
             let key = c.key.clone();
             let label = match &c.key {
                 ChatKey::User(u) => u.clone(),

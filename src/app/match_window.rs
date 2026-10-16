@@ -62,6 +62,12 @@ impl MatchWindow {
         cx.notify();
     }
 
+    fn toggle_engine_logs(&mut self, cx: &mut Context<Self>) {
+        if let Some(viewer) = self.viewer.upgrade() {
+            viewer.update(cx, |viewer, cx| viewer.toggle_engine_logs(cx));
+        }
+    }
+
     fn flip(&mut self, cx: &mut Context<Self>) {
         if self.state.mode != ViewMode::Focus {
             return;
@@ -92,8 +98,8 @@ impl MatchWindow {
 
     fn render_focus(&self, viewer: &Viewer, game: &Game, room: Size<f32>, cx: &Context<Self>) -> Div {
         let view = self.board.views.get(game);
-        let follow = viewer.engine_follow(game);
-        let following = follow.as_ref().is_some_and(|(on, _)| *on);
+        let toggle = viewer.engine_logs_toggle(game);
+        let following = toggle == Some(true);
         if !following {
             self.board.search_scroll.forget();
         }
@@ -151,17 +157,10 @@ impl MatchWindow {
                                     .debug_selector(|| "child-flip".into())
                                     .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.flip(cx))),
                             )
-                            .children(follow.map(|(on, command)| {
-                                ui::icon_button("child-search-follow", ui::IconName::Cpu, "Engine logs", on, true)
+                            .children(toggle.map(|on| {
+                                ui::icon_button("child-search-follow", ui::IconName::Logs, "Engine logs", on, true)
                                     .debug_selector(|| "child-search-follow".into())
-                                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                                        if let Some(viewer) = this.viewer.upgrade() {
-                                            viewer.update(cx, |viewer, cx| {
-                                                viewer.send(command.clone());
-                                                cx.notify();
-                                            });
-                                        }
-                                    }))
+                                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.toggle_engine_logs(cx)))
                             })),
                     ),
             )
@@ -366,24 +365,18 @@ impl Render for MatchWindow {
                                             .when(self.state.mode == ViewMode::Synchro, |d| {
                                                 let games = self.state.games(lobby);
                                                 let Some(game) = games.iter().flatten().next() else { return d };
-                                                let follow = viewer.read(cx).engine_follow(game);
-                                                let Some((following, follow)) = follow else { return d };
+                                                let Some(on) = viewer.read(cx).engine_logs_toggle(game) else { return d };
                                                 d.child(div().flex_1()).child(
                                                     ui::icon_button(
                                                         "child-synchro-search-follow",
-                                                        ui::IconName::Cpu,
+                                                        ui::IconName::Logs,
                                                         "Engine logs",
-                                                        following,
+                                                        on,
                                                         true,
                                                     )
                                                     .debug_selector(|| "child-synchro-search-follow".into())
-                                                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                                                        if let Some(viewer) = this.viewer.upgrade() {
-                                                            viewer.update(cx, |viewer, cx| {
-                                                                viewer.send(follow.clone());
-                                                                cx.notify();
-                                                            });
-                                                        }
+                                                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                                                        this.toggle_engine_logs(cx)
                                                     })),
                                                 )
                                             }),

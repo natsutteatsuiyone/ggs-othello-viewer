@@ -1,5 +1,6 @@
 use crate::store::utc_stamp;
 use rusqlite::Connection;
+use std::collections::BTreeSet;
 use std::sync::{
     Arc, Mutex,
     mpsc::{self, SyncSender, TrySendError},
@@ -67,6 +68,8 @@ pub struct Chat {
     log: Option<ChatLog>,
     /// The login, whose own lines never ask for attention.
     me: String,
+    /// Channels joined to show engine logs, which the chat does not list; leaving one drops it.
+    pub log_channels: BTreeSet<String>,
 }
 
 /// `.chat`, the channel every login is in, is open before anything arrives.
@@ -76,7 +79,8 @@ impl Chat {
     pub fn new(log: Option<(Connection, String)>, me: String) -> Chat {
         let key = ChatKey::Channel(DEFAULT_CHANNEL.into());
         let log = log.map(|(db, server)| ChatLog::new(db, server, me.clone(), LOG_QUEUE_CAPACITY));
-        let mut chat = Chat { conversations: Vec::new(), selected: key.clone(), log, me };
+        let mut chat =
+            Chat { conversations: Vec::new(), selected: key.clone(), log, me, log_channels: BTreeSet::new() };
         chat.conversation(&key);
         chat
     }
@@ -107,6 +111,9 @@ impl Chat {
     }
 
     fn drop_conversation(&mut self, key: &ChatKey) {
+        if let ChatKey::Channel(c) = key {
+            self.log_channels.remove(c);
+        }
         self.conversations.retain(|c| &c.key != key);
         if &self.selected == key {
             self.open(ChatKey::Channel(DEFAULT_CHANNEL.into()));

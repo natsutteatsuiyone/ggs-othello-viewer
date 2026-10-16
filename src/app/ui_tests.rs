@@ -4109,3 +4109,61 @@ fn switching_synchro_boards_keeps_each_players_log_column(cx: &mut TestAppContex
     settle(cx);
     assert_ne!(alice_left(cx), on_first, "Flip still swaps the columns");
 }
+
+fn sent_line(viewer: &Entity<Viewer>, line: &str, cx: &mut VisualTestContext) -> bool {
+    cx.update(|_, cx| viewer.read(cx).log.iter().flat_map(|b| &b.lines).any(|l| l == line))
+}
+
+#[gpui_kit::test]
+fn the_engine_log_setting_is_saved_and_starts_the_next_session(cx: &mut TestAppContext) {
+    let (viewer, cx) = fixture(cx);
+    follow_engine_logs("search-follow", cx);
+    let saved = |cx: &mut VisualTestContext| {
+        cx.update(|_, cx| crate::store::setting(viewer.read(cx).db.as_ref().unwrap(), "engine_logs"))
+    };
+    assert_eq!(saved(cx), "on");
+    cx.update(|window, cx| {
+        for (setting, on) in [("on", true), ("off", false)] {
+            let db = crate::store::memory();
+            crate::store::put_setting(&db, "engine_logs", setting).unwrap();
+            let next = cx.new(|cx| Viewer::new(Launch::Login, ui::ThemeChoice::Dark, Ok(db), window, cx));
+            assert_eq!(next.read(cx).engine_logs, on, "a saved {setting} starts {setting}");
+        }
+    });
+    follow_engine_logs("search-follow", cx);
+    assert_eq!(saved(cx), "off");
+}
+
+#[gpui_kit::test]
+fn the_logs_follow_the_matches_on_screen_and_leave_the_users_own_channels(cx: &mut TestAppContext) {
+    let (viewer, cx) = fixture(cx);
+    cx.update(|_, cx| viewer.update(cx, |v, _| assert!(v.send("chann + .bob".to_string()))));
+    follow_engine_logs("search-follow", cx);
+    assert!(sent_line(&viewer, "> chann + .alice", cx), "only the channel not yet joined");
+    cx.update(|_, cx| {
+        viewer.update(cx, |v, cx| {
+            let Some((_, lobby)) = v.session.connected_mut() else { unreachable!() };
+            let mut record = GameRecord::parse(SPEC_JOIN).unwrap();
+            record.black.name = "carol".into();
+            record.white.name = "dave".into();
+            lobby.apply(OsMsg::Join { id: ".30".into(), record: Box::new(record) }, Instant::now());
+            lobby.show(".30");
+            v.sync_log_channels();
+            cx.notify();
+        })
+    });
+    settle(cx);
+    assert!(sent_line(&viewer, "> chann - .alice", cx), "the channel joined for .12 is left, .bob stays");
+    assert!(sent_line(&viewer, "> chann + .carol .dave", cx));
+    cx.update(|_, cx| {
+        let Screen::Connected(conn) = &viewer.read(cx).session.screen else { unreachable!() };
+        assert!(conn.chat.conversations.iter().any(|c| c.key == ChatKey::Channel(".bob".into())));
+        assert_eq!(conn.chat.log_channels.iter().collect::<Vec<_>>(), [".carol", ".dave"]);
+    });
+    follow_engine_logs("search-follow", cx);
+    assert!(sent_line(&viewer, "> chann - .carol .dave", cx), "off leaves what it joined");
+    cx.update(|_, cx| {
+        let Screen::Connected(conn) = &viewer.read(cx).session.screen else { unreachable!() };
+        assert!(conn.chat.conversations.iter().any(|c| c.key == ChatKey::Channel(".bob".into())), "and only that");
+    });
+}
