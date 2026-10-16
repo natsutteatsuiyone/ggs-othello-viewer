@@ -737,16 +737,7 @@ impl Viewer {
         if let Some(game) = l.focused() {
             let at = self.board.views.get(game).cursor;
             self.board.moves_scroll.scroll_to_item(record_row(game, at));
-            for (color, scroll) in [Color::Black, Color::White].into_iter().zip(&self.board.search_scroll) {
-                match at {
-                    None => scroll.scroll_to_bottom(),
-                    Some(k) => {
-                        if let Some(i) = search_anchor(&l.searches, game, k, color) {
-                            scroll.scroll_to_item(i);
-                        }
-                    }
-                }
-            }
+            scroll_search_logs(&self.board.search_scroll, &l.searches, game, at);
         }
         cx.notify();
     }
@@ -951,7 +942,10 @@ impl Viewer {
             (Some(Sheet::Tourney(id)), _, _) => self.render_tourney(id, lobby, cx).into_any_element(),
             (None, ViewMode::Synchro, _) => {
                 let height = self.center_size.map_or(room.height, |s| f32::from(s.height));
-                render_synchro(lobby, size(room.width, height), &self.board, cx).into_any_element()
+                let halves = lobby.synchro_halves();
+                let scroll = &self.board.search_scroll;
+                let (room, logs) = self.synchro_logs(&lobby.searches, &halves, scroll, size(room.width, height));
+                div().v_flex().child(render_synchro(lobby, room, &self.board, cx)).children(logs).into_any_element()
             }
             (None, ViewMode::Focus, Some(g)) => self.render_focus(lobby, g, room, now, cx).into_any_element(),
             (None, ViewMode::Focus, None) => empty_state(match &lobby.focus {
@@ -1005,7 +999,28 @@ impl Viewer {
                                         .px_4()
                                         .pt_3()
                                         .children(self.back_button(cx))
-                                        .when(show_view_tabs, |d| d.child(view_tabs)),
+                                        .when(show_view_tabs, |d| d.child(view_tabs))
+                                        .when(self.sheet.is_none() && lobby.view == ViewMode::Synchro, |d| {
+                                            let halves = lobby.synchro_halves();
+                                            let Some(game) = halves.iter().flatten().next() else { return d };
+                                            let (following, follow) = self.engine_follow(game);
+                                            d.child(div().flex_1()).child(
+                                                ui::icon_button(
+                                                    "synchro-search-follow",
+                                                    ui::IconName::Cpu,
+                                                    "Engine logs",
+                                                    following,
+                                                    true,
+                                                )
+                                                .debug_selector(|| "synchro-search-follow".into())
+                                                .on_click(cx.listener(
+                                                    move |this, _: &ClickEvent, _, cx| {
+                                                        this.send(follow.clone());
+                                                        cx.notify();
+                                                    },
+                                                )),
+                                            )
+                                        }),
                                 )
                             })
                             // The scrollbar overlays a still frame; inside the scrolled area it would scroll away.
@@ -1156,19 +1171,9 @@ impl Viewer {
             ))
             .child(under_board(game, at, width, cx, Viewer::navigate))
             .when(following, |d| {
-                {
-                    // The logs take a share of the column's height, and the board the rest.
-                    let height = (center_h * 0.3).clamp(140., 420.);
-                    d.child(engine_logs(
-                        &lobby.searches,
-                        &self.board.search_scroll,
-                        game,
-                        at,
-                        view.flipped,
-                        width,
-                        height,
-                    ))
-                }
+                let (height, _) = engine_logs_h(center_h);
+                let scroll = &self.board.search_scroll;
+                d.child(engine_logs(&lobby.searches, scroll, game, at, view.flipped, room.width.max(width), height))
             })
             .on_prepaint(measure(cx.weak_entity(), |this: &mut Viewer, s| this.board.focus_fit.column(s)))
     }
@@ -1391,6 +1396,25 @@ impl Viewer {
                     ),
             ),
         )
+    }
+
+    /// Under a synchro match's boards, its players' log boxes once both channels are joined, and the room
+    /// left for the boards.
+    fn synchro_logs(
+        &self,
+        searches: &crate::search::Searches,
+        games: &[Option<&Game>],
+        scroll: &[ScrollHandle; 2],
+        room: Size<f32>,
+    ) -> (Size<f32>, Option<Div>) {
+        let Some(game) = games.iter().flatten().next() else { return (room, None) };
+        if !self.engine_follow(game).0 {
+            return (room, None);
+        }
+        let (height, taken) = engine_logs_h(room.height);
+        let logs =
+            div().px_4().pb_4().child(engine_logs(searches, scroll, game, None, false, room.width, height));
+        (size(room.width, room.height - taken), Some(logs))
     }
 
     /// Whether both players' log channels are joined, and the `chann` command that toggles them.

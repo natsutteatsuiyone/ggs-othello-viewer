@@ -371,6 +371,28 @@ pub(super) fn search_anchor(searches: &Searches, game: &Game, k: usize, color: C
     searches.position(name, &game.id, ply)
 }
 
+/// The log boxes' scrolling height in a column `column_h` tall, and all the height they take: their name row,
+/// padding and the gap above them. They take a share of the column, and the boards the rest.
+pub(super) fn engine_logs_h(column_h: f32) -> (f32, f32) {
+    let h = (column_h * 0.3).clamp(140., 420.);
+    (h, h + 52.)
+}
+
+/// Scrolls the log boxes to what position `at` shows: live, the newest entries; browsing, each player's last
+/// move up to `at`.
+pub(super) fn scroll_search_logs(scroll: &[ScrollHandle; 2], searches: &Searches, game: &Game, at: At) {
+    for (color, scroll) in [Color::Black, Color::White].into_iter().zip(scroll) {
+        match at {
+            None => scroll.scroll_to_bottom(),
+            Some(k) => {
+                if let Some(i) = search_anchor(searches, game, k, color) {
+                    scroll.scroll_to_item(i);
+                }
+            }
+        }
+    }
+}
+
 /// One box per player, under the player panels' columns: what the player's engine sent to its log channel,
 /// as it was sent, in arrival order, with a rule where the server announced each of the player's moves. A
 /// player's engine logs both boards of a synchro match to one channel, so a box follows the player rather

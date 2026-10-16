@@ -3909,3 +3909,43 @@ fn the_servers_move_announcements_divide_a_players_log_on_both_synchro_boards(cx
         );
     });
 }
+
+#[gpui_kit::test]
+fn a_match_window_shows_the_engine_logs_under_its_board(cx: &mut TestAppContext) {
+    let (viewer, cx) = fixture(cx);
+    cx.update(|_, cx| viewer.update(cx, |v, cx| v.open_match_window(".12", false, cx)));
+    settle(cx);
+    let mut child = child_context(&viewer, ".12", cx);
+    assert!(child.debug_bounds("search").is_none(), "no boxes before the channels are joined");
+    let button = child.debug_bounds("child-search-follow").expect("the window offers its engine logs");
+    child.simulate_click(button.center(), Default::default());
+    settle(&mut child);
+    cx.update(|_, cx| {
+        viewer.update(cx, |v, cx| {
+            assert!(v.log.iter().flat_map(|b| &b.lines).any(|l| l == "> chann + .alice .bob"));
+            v.on_message(vec![".bob bob: depth 24".into()], cx);
+        })
+    });
+    settle(&mut child);
+    let board = child.debug_bounds("focus-board").unwrap();
+    assert!(child.debug_bounds("search").is_some_and(|s| s.top() > board.bottom()), "the boxes sit under the board");
+    assert!(child.debug_bounds("search-bob").is_some());
+}
+
+#[gpui_kit::test]
+fn the_synchro_view_shows_the_engine_logs_across_both_boards(cx: &mut TestAppContext) {
+    let (viewer, cx) = fixture(cx);
+    add_synchro_pair(&viewer, cx);
+    open_synchro(&viewer, cx);
+    assert!(cx.debug_bounds("search").is_none());
+    let button = cx.debug_bounds("synchro-search-follow").expect("the synchro view offers the engine logs");
+    cx.simulate_click(button.center(), Default::default());
+    settle(cx);
+    let left = cx.debug_bounds("synchro-card-.20.0").unwrap();
+    let right = cx.debug_bounds("synchro-card-.20.1").unwrap();
+    let logs = cx.debug_bounds("search").expect("the boxes appear once the channels are joined");
+    assert!(logs.top() > left.bottom().max(right.bottom()), "under both boards");
+    assert!(logs.size.width > left.size.width, "the boxes span the boards' row");
+    let center = cx.debug_bounds("center").unwrap();
+    assert!(logs.bottom() <= center.bottom(), "the boards make room for them: {logs:?} {center:?}");
+}

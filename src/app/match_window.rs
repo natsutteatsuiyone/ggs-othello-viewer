@@ -11,6 +11,8 @@ pub(super) struct MatchWindow {
     /// The scrolling area under the tabs, as last laid out.
     body: Option<Size<Pixels>>,
     board: BoardPane,
+    /// `Searches::added` when the log boxes last caught up with it.
+    searches_seen: u64,
     _observe: Subscription,
 }
 
@@ -22,6 +24,14 @@ impl MatchWindow {
         let observe = cx.observe(viewer, |this, viewer, cx| {
             if let Some((_, lobby)) = viewer.read(cx).session.connected() {
                 this.state.reconcile(lobby);
+                // Live, the log boxes stay on their newest lines, as in the main window.
+                let added = lobby.searches.added();
+                if std::mem::replace(&mut this.searches_seen, added) != added
+                    && let Some(game) = this.state.game(lobby, &this.state.selected_id())
+                    && this.board.views.get(game).cursor.is_none()
+                {
+                    scroll_search_logs(&this.board.search_scroll, &lobby.searches, game, None);
+                }
             }
             cx.notify();
         });
@@ -31,6 +41,7 @@ impl MatchWindow {
             focus: cx.focus_handle(),
             body: None,
             board: BoardPane::default(),
+            searches_seen: 0,
             _observe: observe,
         }
     }
@@ -55,10 +66,16 @@ impl MatchWindow {
         if self.state.mode != ViewMode::Focus {
             return;
         }
-        self.with_selected(cx, |board, game| {
-            board.views.navigate(game, nav);
-            board.moves_scroll.scroll_to_item(record_row(game, board.views.get(game).cursor));
-        });
+        let id = self.state.selected_id();
+        if let Some(viewer) = self.viewer.upgrade()
+            && let Some((_, lobby)) = viewer.read(cx).session.connected()
+            && let Some(game) = self.state.game(lobby, &id)
+        {
+            self.board.views.navigate(game, nav);
+            let at = self.board.views.get(game).cursor;
+            self.board.moves_scroll.scroll_to_item(record_row(game, at));
+            scroll_search_logs(&self.board.search_scroll, &lobby.searches, game, at);
+        }
         cx.notify();
     }
 
@@ -90,8 +107,9 @@ impl MatchWindow {
         }))
     }
 
-    fn render_focus(&self, game: &Game, room: Size<f32>, cx: &Context<Self>) -> Div {
+    fn render_focus(&self, viewer: &Viewer, game: &Game, room: Size<f32>, cx: &Context<Self>) -> Div {
         let view = self.board.views.get(game);
+        let (following, follow) = viewer.engine_follow(game);
         let sidebar = if room.width >= 760. { 220. } else { 0. };
         let board_room = size((room.width - sidebar - 32.).max(0.), room.height);
         let cell = cell_size(
@@ -145,6 +163,26 @@ impl MatchWindow {
                                 ui::icon_button("child-flip", ui::IconName::FlipVertical2, "Flip", view.flipped, true)
                                     .debug_selector(|| "child-flip".into())
                                     .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.flip(cx))),
+                            )
+                            .child(
+                                ui::icon_button(
+                                    "child-search-follow",
+                                    ui::IconName::Cpu,
+                                    "Engine logs",
+                                    following,
+                                    true,
+                                )
+                                .debug_selector(|| "child-search-follow".into())
+                                .on_click(cx.listener(
+                                    move |this, _: &ClickEvent, _, cx| {
+                                        if let Some(viewer) = this.viewer.upgrade() {
+                                            viewer.update(cx, |viewer, cx| {
+                                                viewer.send(follow.clone());
+                                                cx.notify();
+                                            });
+                                        }
+                                    },
+                                )),
                             ),
                     ),
             )
@@ -157,6 +195,20 @@ impl MatchWindow {
                 measure(cx.weak_entity(), |this: &mut Self, s| this.board.focus_fit.board(s)),
             ))
             .child(under_board(game, view.cursor, width, cx, Self::navigate))
+            .when(following, |d| {
+                let (height, _) = engine_logs_h(room.height);
+                let scroll = &self.board.search_scroll;
+                let searches = &viewer.session.lobby.searches;
+                d.child(engine_logs(
+                    searches,
+                    scroll,
+                    game,
+                    view.cursor,
+                    view.flipped,
+                    board_room.width.max(width),
+                    height,
+                ))
+            })
             .on_prepaint(measure(cx.weak_entity(), |this: &mut Self, s| this.board.focus_fit.column(s)));
         let moves = div()
             .w(px(if sidebar > 0. { sidebar } else { room.width }))
@@ -284,7 +336,9 @@ impl Render for MatchWindow {
                             ));
                             let room = size((f32::from(body.width) - 32.).max(0.), f32::from(body.height).max(0.));
                             let body = if self.state.mode == ViewMode::Synchro {
-                                render_match_boards(
+                                let scroll = &self.board.search_scroll;
+                                let (room, logs) = viewer.read(cx).synchro_logs(&lobby.searches, &games, scroll, room);
+                                div().v_flex().child(render_match_boards(
                                     &self.state.id,
                                     &games,
                                     room,
@@ -296,9 +350,10 @@ impl Render for MatchWindow {
                                         w.state.mode = ViewMode::Focus;
                                         cx.notify();
                                     },
-                                )
+                                ))
+                                .children(logs)
                             } else if let Some(game) = games[self.state.selected] {
-                                self.render_focus(game, room, cx)
+                                self.render_focus(viewer.read(cx), game, room, cx)
                             } else {
                                 empty_state("Loading this board...").debug_selector(|| "match-live-loading".into())
                             };
@@ -328,6 +383,29 @@ impl Render for MatchWindow {
                                             }))
                                             .when(self.state.mode == ViewMode::Focus, |d| {
                                                 d.child(self.render_halves(cx))
+                                            })
+                                            .when(self.state.mode == ViewMode::Synchro, |d| {
+                                                let games = self.state.games(lobby);
+                                                let Some(game) = games.iter().flatten().next() else { return d };
+                                                let (following, follow) = viewer.read(cx).engine_follow(game);
+                                                d.child(div().flex_1()).child(
+                                                    ui::icon_button(
+                                                        "child-synchro-search-follow",
+                                                        ui::IconName::Cpu,
+                                                        "Engine logs",
+                                                        following,
+                                                        true,
+                                                    )
+                                                    .debug_selector(|| "child-synchro-search-follow".into())
+                                                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                                                        if let Some(viewer) = this.viewer.upgrade() {
+                                                            viewer.update(cx, |viewer, cx| {
+                                                                viewer.send(follow.clone());
+                                                                cx.notify();
+                                                            });
+                                                        }
+                                                    })),
+                                                )
                                             }),
                                     )
                                 })

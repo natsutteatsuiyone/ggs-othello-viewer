@@ -27,7 +27,11 @@ pub fn is_log(channel: &str, from: &str) -> bool {
 
 /// Each login's log lines and moves, oldest first.
 #[derive(Default, Debug)]
-pub struct Searches(BTreeMap<String, VecDeque<Entry>>);
+pub struct Searches {
+    entries: BTreeMap<String, VecDeque<Entry>>,
+    /// Entries added so far, so a view can tell something new arrived.
+    added: u64,
+}
 
 /// An engine logs every move of every game it plays; older entries are dropped past this many.
 const KEEP: usize = 4096;
@@ -42,7 +46,8 @@ impl Searches {
     }
 
     fn push(&mut self, login: &str, entry: Entry) {
-        let entries = self.0.entry(login.to_string()).or_default();
+        self.added += 1;
+        let entries = self.entries.entry(login.to_string()).or_default();
         entries.push_back(entry);
         if entries.len() > KEEP {
             entries.pop_front();
@@ -51,7 +56,11 @@ impl Searches {
 
     /// `login`'s entries, oldest first.
     pub fn timeline(&self, login: &str) -> impl Iterator<Item = &Entry> {
-        self.0.get(login).into_iter().flatten()
+        self.entries.get(login).into_iter().flatten()
+    }
+
+    pub fn added(&self) -> u64 {
+        self.added
     }
 
     /// Where the `ply`th move of `game` falls in `login`'s timeline.
