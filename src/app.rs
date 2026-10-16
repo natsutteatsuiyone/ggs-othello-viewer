@@ -734,8 +734,19 @@ impl Viewer {
         if let Some(game) = l.focused() {
             self.board.views.navigate(game, nav);
         }
-        if let Some(r) = l.focused().map(|g| record_row(g, self.board.views.get(g).cursor)) {
-            self.board.moves_scroll.scroll_to_item(r);
+        if let Some(game) = l.focused() {
+            let at = self.board.views.get(game).cursor;
+            self.board.moves_scroll.scroll_to_item(record_row(game, at));
+            for (color, scroll) in [Color::Black, Color::White].into_iter().zip(&self.board.search_scroll) {
+                match at {
+                    None => scroll.scroll_to_bottom(),
+                    Some(k) => {
+                        if let Some(i) = search_anchor(&l.searches, game, k, color) {
+                            scroll.scroll_to_item(i);
+                        }
+                    }
+                }
+            }
         }
         cx.notify();
     }
@@ -1144,7 +1155,21 @@ impl Viewer {
                 measure(cx.weak_entity(), |this: &mut Viewer, s| this.board.focus_fit.board(s)),
             ))
             .child(under_board(game, at, width, cx, Viewer::navigate))
-            .when(following, |d| d.child(engine_logs(&lobby.searches, &halves, game, at, view.flipped, width)))
+            .when(following, |d| {
+                {
+                    // The logs take a share of the column's height, and the board the rest.
+                    let height = (center_h * 0.3).clamp(140., 420.);
+                    d.child(engine_logs(
+                        &lobby.searches,
+                        &self.board.search_scroll,
+                        game,
+                        at,
+                        view.flipped,
+                        width,
+                        height,
+                    ))
+                }
+            })
             .on_prepaint(measure(cx.weak_entity(), |this: &mut Viewer, s| this.board.focus_fit.column(s)))
     }
 }

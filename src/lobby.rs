@@ -4,6 +4,7 @@ use std::time::{Duration, Instant};
 use crate::game::{Game, GameKey, GameSource, Phase, archive_id};
 use crate::ggf::GameRecord;
 use crate::net;
+use crate::othello::Color;
 use crate::proto::{
     self, Archived, Finished, MatchEntry, MatchSettings, OS, OsMsg, Outcome, Profile, Rank, RatingType, ReplyKind,
     User, UserStatus,
@@ -747,11 +748,14 @@ impl Lobby {
             }
             OsMsg::Join { id, record } => self.on_join(id, *record, now, &mut notes),
             OsMsg::Update { id, token } => match self.games.get_mut(&id) {
-                Some(g) => {
-                    if let Err(e) = g.play(token, now) {
-                        notes.push(format!("update {id} {}: {e}", token.mv));
+                Some(g) => match g.play(token, now) {
+                    Ok(()) => {
+                        let m = g.moves().last().expect("a move was just played");
+                        let player = if m.color == Color::Black { &g.black.name } else { &g.white.name };
+                        self.searches.add_move(player, &id, g.moves().len(), m.token.mv);
                     }
-                }
+                    Err(e) => notes.push(format!("update {id} {}: {e}", token.mv)),
+                },
                 None => notes.push(format!("update for unknown game {id}")),
             },
             // Players keep getting the notices of a closed own match.

@@ -1,5 +1,5 @@
 use super::*;
-use crate::search::{SearchLog, Searches};
+use crate::search::{Entry, Searches};
 
 #[derive(Default)]
 pub(super) struct BoardPane {
@@ -7,6 +7,8 @@ pub(super) struct BoardPane {
     pub focus_fit: Fit,
     pub synchro_fit: [Fit; 2],
     pub moves_scroll: ScrollHandle,
+    /// The engine log boxes under the Focus board, black's player first.
+    pub search_scroll: [ScrollHandle; 2],
 }
 
 /// The Focus column and its board as last laid out. Everything in the column but the board keeps
@@ -361,49 +363,57 @@ pub(super) fn player_panel(game: &Game, at: At, flipped: bool, now: Instant, wid
         .child(cell(right))
 }
 
-/// One box per player, under the player panels' columns, listing that player's engine reports newest first;
-/// scrolling down goes back in time. A player's engine logs both boards of a synchro match to one channel, so
-/// a box follows the engine rather than a color. Browsing, the list starts at the report on the player's last
-/// move up to position `at` of the board shown. Every box keeps its height, so the board never resizes.
+/// Where the box for `color`'s player scrolls to while browsing position `k`: the server's announcement of
+/// that player's last move up to `k`.
+pub(super) fn search_anchor(searches: &Searches, game: &Game, k: usize, color: Color) -> Option<usize> {
+    let name = if color == Color::Black { &game.black.name } else { &game.white.name };
+    let ply = game.moves()[..k].iter().rposition(|m| m.color == color)? + 1;
+    searches.position(name, &game.id, ply)
+}
+
+/// One box per player, under the player panels' columns: what the player's engine sent to its log channel,
+/// as it was sent, in arrival order, with a rule where the server announced each of the player's moves. A
+/// player's engine logs both boards of a synchro match to one channel, so a box follows the player rather
+/// than a color. Browsing, the rule of the player's last move up to `at` is marked and scrolled to. Every
+/// box keeps `height`, so a log arriving never resizes the board.
 pub(super) fn engine_logs(
     searches: &Searches,
-    halves: &[&Game],
+    scroll: &[ScrollHandle; 2],
     game: &Game,
     at: At,
     flipped: bool,
     width: f32,
+    height: f32,
 ) -> Div {
-    let synchro = halves.len() > 1;
-    let ids: Vec<&str> = halves.iter().map(|g| g.id.as_str()).collect();
     let cell = |color: Color| {
-        let name = match color {
-            Color::Black => &game.black.name,
-            Color::White => &game.white.name,
-        };
-        let mut history: Vec<&SearchLog> = searches.history(name, &ids).collect();
-        if let Some(k) = at {
-            let anchor = game.moves()[..k]
-                .iter()
-                .rev()
-                .find(|m| m.color == color && m.token.mv != crate::othello::Move::Pass)
-                .and_then(|m| searches.on_move(name, &game.id, m.token.mv));
-            match history.iter().position(|l| anchor.is_some_and(|a| std::ptr::eq(*l, a))) {
-                Some(i) => drop(history.drain(..i)),
-                None => history.clear(),
+        let name = if color == Color::Black { &game.black.name } else { &game.white.name };
+        let anchor = at.and_then(|k| search_anchor(searches, game, k, color));
+        let entries: Vec<&Entry> = searches.timeline(name).collect();
+        let empty = entries.is_empty();
+        let rows = entries.into_iter().enumerate().map(|(i, entry)| match entry {
+            Entry::Line(text) => div().flex_none().whitespace_normal().child(text.clone()),
+            Entry::Move { game: id, ply, mv } => {
+                let selector = format!("search-move-{name}-{id}-{ply}");
+                let ink = if anchor == Some(i) { ui::accent() } else { ui::muted() };
+                let rule = || div().flex_1().h(px(1.)).bg(ui::line());
+                div()
+                    .debug_selector(move || selector.clone())
+                    .flex_none()
+                    .h(px(20.))
+                    .my_0p5()
+                    .h_flex()
+                    .gap_2()
+                    .text_color(ink)
+                    .child(rule())
+                    .child(format!("{id} · {ply} {mv}"))
+                    .child(rule())
             }
-        }
-        let selector = match history.first() {
-            Some(l) => format!(
-                "search-{}-{}-{}",
-                l.engine,
-                l.game.as_deref().unwrap_or("any"),
-                l.mv.map_or("any".into(), |m| m.to_string())
-            ),
-            None => format!("search-{name}-none"),
-        };
-        let empty = history.is_empty();
+        });
         div()
-            .debug_selector(move || selector.clone())
+            .debug_selector({
+                let name = name.clone();
+                move || format!("search-{name}")
+            })
             .flex_1()
             .min_w_0()
             .v_flex()
@@ -417,12 +427,14 @@ pub(super) fn engine_logs(
             .child(
                 div()
                     .id(SharedString::from(format!("search-body-{name}")))
-                    .h(px(ui::SEARCH_H))
+                    .track_scroll(&scroll[if color == Color::Black { 0 } else { 1 }])
+                    .h(px(height))
                     .overflow_y_scroll()
                     .v_flex()
+                    .font_family(ui::MONO)
                     .text_xs()
-                    .when(empty, |d| d.child(div().text_color(ui::muted()).child("No search log.")))
-                    .children(history.into_iter().enumerate().map(|(i, log)| report(log, synchro, i > 0))),
+                    .when(empty, |d| d.child(div().text_color(ui::muted()).child("No log yet.")))
+                    .children(rows),
             )
     };
     let (left, right) = if flipped { (Color::White, Color::Black) } else { (Color::Black, Color::White) };
@@ -433,58 +445,6 @@ pub(super) fn engine_logs(
         .gap(px(ui::PANEL_GAP))
         .child(cell(left))
         .child(cell(right))
-}
-
-/// One report: the board and move it is about, the Edax fields laid out by name, then its other lines.
-fn report(log: &SearchLog, synchro: bool, ruled: bool) -> Div {
-    let label = |text: &'static str| div().flex_none().w(px(44.)).text_color(ui::muted()).child(text);
-    let value = |text: String| div().flex_1().min_w_0().truncate().font_family(ui::MONO).child(text);
-    let row = || div().min_h(px(20.)).flex_none().h_flex().gap_2();
-    let place: Vec<String> =
-        [log.game.clone().filter(|_| synchro), log.mv.map(|m| m.to_string())].into_iter().flatten().collect();
-    let stats: Vec<String> = [&log.nodes, &log.time, &log.speed].into_iter().flatten().cloned().collect();
-    // Beside the fields, other lines are a footnote; without them, they are the report.
-    let muted = log.has_fields();
-    let selector = format!(
-        "search-report-{}-{}-{}",
-        log.engine,
-        log.game.as_deref().unwrap_or("any"),
-        log.mv.map_or("any".into(), |m| m.to_string())
-    );
-    div()
-        .debug_selector(move || selector.clone())
-        .flex_none()
-        .v_flex()
-        .gap_0p5()
-        .py_1p5()
-        .when(ruled, |d| d.border_t_1().border_color(ui::line()))
-        .when(!place.is_empty() || log.score.is_some() || log.depth.is_some(), |d| {
-            d.child(
-                row()
-                    .min_h(px(26.))
-                    .children(log.score.clone().map(|s| {
-                        div()
-                            .flex_none()
-                            .font_family(ui::MONO)
-                            .text_base()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(ui::bright())
-                            .child(s)
-                    }))
-                    .children(log.depth.clone().map(|d| div().font_family(ui::MONO).text_color(ui::muted()).child(d)))
-                    .child(div().flex_1())
-                    .when(!place.is_empty(), |d| {
-                        d.child(
-                            div().flex_none().font_family(ui::MONO).text_color(ui::muted()).child(place.join(" · ")),
-                        )
-                    }),
-            )
-        })
-        .children(log.pv.clone().map(|pv| row().child(label("PV")).child(value(pv))))
-        .when(!stats.is_empty(), |d| d.child(row().text_color(ui::muted()).child(value(stats.join(" · ")))))
-        .children(log.rest.iter().map(|l| {
-            div().flex_none().font_family(ui::MONO).when(muted, |d| d.text_color(ui::muted())).child(l.clone())
-        }))
 }
 
 pub(super) fn under_board<T: 'static>(

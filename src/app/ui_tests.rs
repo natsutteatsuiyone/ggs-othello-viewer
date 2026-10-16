@@ -1,4 +1,6 @@
 use super::{Conn, Launch, Rail, Screen, Viewer, note};
+use crate::othello::Color;
+use crate::search::Entry;
 use crate::{
     chat::{Chat, ChatKey, ChatLine, DEFAULT_CHANNEL},
     ggf::{GameRecord, tests::SPEC_JOIN},
@@ -3827,7 +3829,7 @@ fn a_finished_tournament_reopens_from_its_loaded_page(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn engine_logs_join_both_players_channels_and_reports_stay_out_of_the_chat(cx: &mut TestAppContext) {
+fn engine_logs_join_both_players_channels_and_stay_out_of_the_chat(cx: &mut TestAppContext) {
     let (viewer, cx) = fixture(cx);
     let sent = |v: &Viewer, cmd: &str| v.log.iter().flat_map(|b| &b.lines).any(|line| line == cmd);
     let button = cx.debug_bounds("search-follow").expect("the focused game offers its engine logs");
@@ -3836,43 +3838,25 @@ fn engine_logs_join_both_players_channels_and_reports_stay_out_of_the_chat(cx: &
     cx.update(|_, cx| {
         viewer.update(cx, |v, cx| {
             assert!(sent(v, "> chann + .alice .bob"));
-            v.on_message(
-                vec![
-                    ".bob bob: ------------".into(),
-                    "bob plays C5 in game .12 using 4 threads ;".into(),
-                    "score == 1 at 20 ; PV: C5 f6 ;".into(),
-                ],
-                cx,
-            );
-            let c5 = crate::othello::Move::parse("c5").unwrap();
-            let report =
-                v.session.lobby.searches.on_move("bob", ".12", c5).expect("the report is kept with its engine");
-            assert_eq!(report.pv.as_deref(), Some("C5 f6"));
-            let Screen::Connected(conn) = &v.session.screen else { unreachable!() };
-            assert!(
-                conn.chat.conversations.iter().flat_map(|c| &c.lines).all(|said| !said
-                    .line
-                    .lines
-                    .iter()
-                    .any(|l| l.contains("plays"))),
-                "a report is not chat"
-            );
-            v.on_message(vec![".chat bob: bob plays d3 in game .12".into()], cx);
-            let d3 = crate::othello::Move::parse("d3").unwrap();
-            assert!(
-                v.session.lobby.searches.on_move("bob", ".12", d3).is_none(),
-                "only the sender's log channel carries reports"
+            v.on_message(vec![".bob bob: ------------".into(), "bob plays C5 ;".into()], cx);
+            v.on_message(vec![".bob bob: depth 24".into()], cx);
+            v.on_message(vec![".chat bob: bob plays d3".into()], cx);
+            let lines: Vec<_> = v.session.lobby.searches.timeline("bob").cloned().collect();
+            assert_eq!(
+                lines,
+                ["------------", "bob plays C5 ;", "depth 24"].map(|l| Entry::Line(l.into())),
+                "every line of the owner's channel, as sent, in order; nothing from .chat"
             );
             let Screen::Connected(conn) = &v.session.screen else { unreachable!() };
-            assert!(conn.chat.current().unwrap().lines.iter().any(|s| s.line.lines == ["bob plays d3 in game .12"]));
+            let chat: Vec<&String> =
+                conn.chat.conversations.iter().flat_map(|c| &c.lines).flat_map(|s| &s.line.lines).collect();
+            assert!(!chat.iter().any(|l| l.contains("C5") || l.contains("depth 24")), "logs are not chat");
+            assert!(chat.iter().any(|l| *l == "bob plays d3"), "a line on .chat stays chat");
         })
     });
     settle(cx);
     let board = cx.debug_bounds("focus-board").unwrap();
-    assert!(
-        cx.debug_bounds("search").is_some_and(|s| s.top() > board.bottom()),
-        "the engine boxes sit under the board"
-    );
+    assert!(cx.debug_bounds("search").is_some_and(|s| s.top() > board.bottom()), "the log boxes sit under the board");
     let button = cx.debug_bounds("search-follow").unwrap();
     cx.simulate_click(button.center(), Default::default());
     settle(cx);
@@ -3881,46 +3865,47 @@ fn engine_logs_join_both_players_channels_and_reports_stay_out_of_the_chat(cx: &
 }
 
 #[gpui_kit::test]
-fn a_synchro_box_follows_its_engine_across_both_boards(cx: &mut TestAppContext) {
+fn the_servers_move_announcements_divide_a_players_log_on_both_synchro_boards(cx: &mut TestAppContext) {
     let (viewer, cx) = fixture(cx);
     add_synchro_pair(&viewer, cx);
     let button = cx.debug_bounds("search-follow").unwrap();
     cx.simulate_click(button.center(), Default::default());
     settle(cx);
-    let report = |game: &str, mv: &str| {
-        vec![
-            ".alice alice: ---".into(),
-            format!("alice plays {mv} in game {game} ;"),
-            "score == +3 at 20 ; PV: a1 ;".into(),
-        ]
-    };
-    cx.update(|_, cx| viewer.update(cx, |v, cx| v.on_message(report(".20.0", "a1"), cx)));
-    settle(cx);
-    assert!(cx.debug_bounds("search-alice-.20.0-a1").is_some());
-    cx.update(|_, cx| viewer.update(cx, |v, cx| v.on_message(report(".20.1", "h8"), cx)));
-    settle(cx);
-    assert!(cx.debug_bounds("search-alice-.20.1-h8").is_some(), "the newest report shows, whichever board it is about");
-    assert!(cx.debug_bounds("search-alice-.20.0-a1").is_none());
-    let newer = cx.debug_bounds("search-report-alice-.20.1-h8").unwrap();
-    let older = cx.debug_bounds("search-report-alice-.20.0-a1").expect("earlier reports stay to scroll back to");
-    assert!(older.top() >= newer.bottom(), "newest first");
-}
-
-#[gpui_kit::test]
-fn any_format_an_engine_logs_to_its_own_channel_shows_and_stays_out_of_the_chat(cx: &mut TestAppContext) {
-    let (viewer, cx) = fixture(cx);
-    let button = cx.debug_bounds("search-follow").unwrap();
-    cx.simulate_click(button.center(), Default::default());
-    settle(cx);
-    cx.update(|_, cx| {
+    let (player, color, ply) = cx.update(|_, cx| {
         viewer.update(cx, |v, cx| {
-            v.on_message(vec![".bob bob: depth 24  eval +6  pv c5 d6".into()], cx);
-            let Screen::Connected(conn) = &v.session.screen else { unreachable!() };
-            assert!(
-                conn.chat.conversations.iter().flat_map(|c| &c.lines).all(|s| !s.line.lines[0].starts_with("depth 24"))
-            );
+            let Some((_, lobby)) = v.session.connected_mut() else { unreachable!() };
+            let token = crate::othello::MoveToken::parse("e6//3").unwrap();
+            lobby.apply(OsMsg::Update { id: ".20.1".into(), token }, Instant::now());
+            let g = &lobby.games[".20.1"];
+            let m = g.moves().last().unwrap();
+            let player = if m.color == Color::Black { g.black.name.clone() } else { g.white.name.clone() };
+            let color = if lobby.games[".20.0"].black.name == player { Color::Black } else { Color::White };
+            let ply = g.moves().len();
+            v.on_message(vec![format!(".{player} {player}: after")], cx);
+            (player, color, ply)
         })
     });
     settle(cx);
-    assert!(cx.debug_bounds("search-bob-any-any").is_some(), "a log naming no board or move still shows, live");
+    assert!(
+        cx.debug_bounds(format!("search-move-{player}-.20.1-{ply}").leak()).is_some(),
+        "the move on the other board divides the log of the board shown"
+    );
+    cx.update(|_, cx| {
+        let v = viewer.read(cx);
+        let lobby = &v.session.lobby;
+        assert_eq!(
+            lobby.searches.timeline(&player).cloned().collect::<Vec<_>>(),
+            [
+                Entry::Move { game: ".20.1".into(), ply, mv: crate::othello::Move::parse("e6").unwrap() },
+                Entry::Line("after".into()),
+            ]
+        );
+        let shown = &lobby.games[".20.1"];
+        let other = if color == Color::Black { Color::White } else { Color::Black };
+        assert_eq!(
+            super::board::search_anchor(&lobby.searches, shown, ply, other),
+            Some(0),
+            "browsing scrolls to the rule"
+        );
+    });
 }
